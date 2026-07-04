@@ -573,24 +573,24 @@ def generar_grafico_automatico(df, columna, tipo):
 # ==========================================
 def eliminar_columnas_duplicadas(df):
     """
-    Detecta y renombra columnas duplicadas agregando sufijos numéricos
+    Elimina columnas duplicadas manteniendo solo la primera
     """
-    columnas_vistas = {}
-    nuevas_columnas = []
+    columnas_vistas = set()
+    columnas_a_mantener = []
     
     for col in df.columns:
-        col_str = str(col)
+        col_str = str(col).strip().upper()
         
-        # Si ya hemos visto esta columna, agregar sufijo
+        # Si ya hemos visto esta columna, omitirla
         if col_str in columnas_vistas:
-            columnas_vistas[col_str] += 1
-            nueva_col = f"{col_str}_{columnas_vistas[col_str]}"
-            nuevas_columnas.append(nueva_col)
+            print(f"⚠️ Columna duplicada eliminada: {col}")
+            continue
         else:
-            columnas_vistas[col_str] = 0
-            nuevas_columnas.append(col_str)
+            columnas_vistas.add(col_str)
+            columnas_a_mantener.append(col)
     
-    df.columns = nuevas_columnas
+    # Mantener solo columnas únicas
+    df = df[columnas_a_mantener].copy()
     return df
 
 # ==========================================
