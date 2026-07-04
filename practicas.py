@@ -20,21 +20,18 @@ st.set_page_config(
 )
 
 # ==========================================
-# ESTILOS CSS CORREGIDOS - TODO EN NEGRO
+# ESTILOS CSS
 # ==========================================
 st.markdown("""
 <style>
-    /* Fondo general */
     .stApp {
         background: #f5f7fa !important;
     }
     
-    /* TODO el texto del contenido principal en NEGRO */
     .stApp * {
         color: #000000 !important;
     }
     
-    /* Header principal */
     .main-header {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         padding: 2rem;
@@ -56,7 +53,6 @@ st.markdown("""
         font-size: 1.1rem;
     }
     
-    /* Títulos de sección - NEGRO sobre fondo blanco */
     .section-title {
         color: #000000 !important;
         font-size: 1.6rem;
@@ -69,7 +65,6 @@ st.markdown("""
         box-shadow: 0 2px 10px rgba(0,0,0,0.1);
     }
     
-    /* Subtítulos - NEGRO */
     .sub-title {
         color: #000000 !important;
         font-size: 1.3rem;
@@ -77,7 +72,6 @@ st.markdown("""
         margin: 1.5rem 0 1rem 0;
     }
     
-    /* Tarjetas KPI */
     .kpi-card {
         background: #ffffff;
         padding: 1.5rem;
@@ -108,7 +102,6 @@ st.markdown("""
         font-weight: 600;
     }
     
-    /* Sidebar - fondo oscuro con texto blanco */
     [data-testid="stSidebar"] {
         background: linear-gradient(180deg, #1a202c 0%, #2d3748 100%) !important;
     }
@@ -117,13 +110,6 @@ st.markdown("""
         color: #ffffff !important;
     }
     
-    [data-testid="stSidebar"] .stButton > button {
-        background: rgba(255,255,255,0.1) !important;
-        color: #ffffff !important;
-        border: 1px solid rgba(255,255,255,0.2) !important;
-    }
-    
-    /* Footer */
     .footer {
         text-align: center;
         padding: 1.5rem;
@@ -133,44 +119,6 @@ st.markdown("""
         border-top: 2px solid #667eea;
         background: #ffffff;
         border-radius: 10px;
-    }
-    
-    /* Info boxes */
-    .info-box {
-        background: #e6f3ff;
-        border-left: 4px solid #667eea;
-        padding: 1rem;
-        border-radius: 5px;
-        margin: 1rem 0;
-        color: #000000 !important;
-    }
-    
-    /* Expanders */
-    .streamlit-expanderHeader {
-        background: #ffffff !important;
-        color: #000000 !important;
-        font-weight: 600 !important;
-    }
-    
-    /* Tablas */
-    .stDataFrame {
-        background: #ffffff !important;
-    }
-    
-    /* Métricas */
-    [data-testid="stMetric"] {
-        background: #ffffff !important;
-        padding: 1rem;
-        border-radius: 10px;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-    }
-    
-    [data-testid="stMetricLabel"] {
-        color: #000000 !important;
-    }
-    
-    [data-testid="stMetricValue"] {
-        color: #667eea !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -182,45 +130,60 @@ PALETA_PRINCIPAL = ['#667eea', '#764ba2', '#f093fb', '#f5576c', '#4facfe', '#00f
                     '#43e97b', '#38f9d7', '#fa709a', '#fee140', '#30cfd0', '#330867']
 
 # ==========================================
-# FUNCIONES DE LIMPIEZA DE DATOS
+# FUNCIONES DE LIMPIEZA
 # ==========================================
 
 def normalizar_texto(valor):
-    """Normaliza texto: quita tildes, convierte a mayúsculas, elimina espacios extra"""
+    """Normaliza texto: quita tildes, convierte a mayúsculas"""
     if pd.isna(valor) or str(valor).strip() == '':
         return None
     
     texto = str(valor).strip().upper()
-    
-    # Quitar tildes
     tildes = {'Á': 'A', 'É': 'E', 'Í': 'I', 'Ó': 'O', 'Ú': 'U', 'Ñ': 'NN'}
     for tilde, normal in tildes.items():
         texto = texto.replace(tilde, normal)
     
     return texto
 
+def eliminar_columnas_duplicadas(df):
+    """
+    ELIMINA columnas duplicadas (mantiene solo la primera)
+    """
+    columnas_vistas = set()
+    columnas_a_mantener = []
+    
+    for col in df.columns:
+        col_str = str(col).strip().upper()
+        
+        # Si ya hemos visto esta columna, omitirla
+        if col_str in columnas_vistas:
+            print(f"⚠️ Columna duplicada eliminada: {col}")
+            continue
+        else:
+            columnas_vistas.add(col_str)
+            columnas_a_mantener.append(col)
+    
+    # Mantener solo columnas únicas
+    df = df[columnas_a_mantener].copy()
+    return df
+
 def detectar_y_corregir_encabezado(df_raw):
-    """
-    Detecta automáticamente la fila de encabezado y usa nombres reales
-    """
+    """Detecta automáticamente la fila de encabezado"""
     if len(df_raw) == 0:
         return df_raw
     
-    # Buscar la fila que tiene más texto descriptivo (no números)
     mejor_fila_header = 0
     max_puntuacion = 0
     
-    for idx_fila in range(min(5, len(df_raw))):  # Revisar primeras 5 filas
+    for idx_fila in range(min(5, len(df_raw))):
         fila = df_raw.iloc[idx_fila]
         puntuacion = 0
         
         for valor in fila:
             if pd.notna(valor):
                 texto = str(valor).strip()
-                # Si es texto descriptivo (no es número puro, tiene letras)
                 if any(c.isalpha() for c in texto) and len(texto) < 100:
                     puntuacion += 1
-                # Si parece ser un header común
                 headers_comunes = ['AÑO', 'NOMBRE', 'ESTADO', 'SECTOR', 'TIPO', 
                                   'DURACIÓN', 'EMPRESA', 'DOCENTE', 'FECHA', 
                                   'REGISTRO', 'CODIGO', 'DNI', 'EMAIL', 'RUBRO']
@@ -231,32 +194,22 @@ def detectar_y_corregir_encabezado(df_raw):
             max_puntuacion = puntuacion
             mejor_fila_header = idx_fila
     
-    # Usar la mejor fila encontrada como header
     if max_puntuacion > 0:
         headers = df_raw.iloc[mejor_fila_header].tolist()
         
-        # Limpiar headers: convertir a string, mayúsculas, sin espacios extra
         headers_limpios = []
         for i, h in enumerate(headers):
             if pd.notna(h) and str(h).strip() != '':
                 header_limpio = str(h).strip().upper()
-                # Reemplazar espacios y caracteres especiales con guiones bajos
-                header_limpio = header_limpio.replace(' ', '_').replace('/', '_').replace('-', '_')
-                # Quitar tildes
-                tildes = {'Á': 'A', 'É': 'E', 'Í': 'I', 'Ó': 'O', 'Ú': 'U'}
-                for tilde, normal in tildes.items():
-                    header_limpio = header_limpio.replace(tilde, normal)
                 headers_limpios.append(header_limpio)
             else:
                 headers_limpios.append(f'COLUMNA_{i+1}')
         
-        # Crear dataframe con datos después del header
         df = df_raw.iloc[mejor_fila_header + 1:].copy()
         df.columns = headers_limpios
         
         return df
     
-    # Si no encontró buen header, usar la primera fila
     headers = [str(h).strip().upper() if pd.notna(h) and str(h).strip() != '' else f'COLUMNA_{i}' 
                for i, h in enumerate(df_raw.iloc[0])]
     df = df_raw.iloc[1:].copy()
@@ -264,30 +217,37 @@ def detectar_y_corregir_encabezado(df_raw):
     
     return df
 
-
 def limpiar_nombres_columnas(df):
-    """
-    Limpia y estandariza nombres de columnas
-    """
-    # Mapeo de nombres comunes (para unificar variaciones)
+    """Limpia nombres de columnas"""
     mapeo_nombres = {
-        'AÑO_REGISTRO': 'AÑO',
         'AÑO': 'AÑO',
-        'NRO_REGISTRO': 'NRO_REGISTRO',
-        'NUMERO_REGISTRO': 'NRO_REGISTRO',
-        'NRO_DE_CARTA': 'NRO_CARTA',
-        'NUMERO_CARTA': 'NRO_CARTA',
+        'NRO REGISTRO': 'NRO_REGISTRO',
+        'NRO DE CARTA': 'NRO_CARTA',
+        'CODIGO': 'CODIGO',
+        'DNI': 'DNI',
+        'NOMBRE': 'NOMBRE',
+        'CELULAR': 'CELULAR',
+        'EMAIL': 'EMAIL',
+        'DIRECCIÓN': 'DIRECCION',
+        'FECHA DE INICIO': 'FECHA_INICIO',
+        'FECHA DE FIN': 'FECHA_FIN',
         'DURACIÓN': 'DURACION',
-        'DURACION_DIAS': 'DURACION',
-        'DOCENTE_REVISOR': 'DOCENTE_REVISOR',
-        'PROFESOR_REVISOR': 'DOCENTE_REVISOR',
-        'FECHA_INICIO': 'FECHA_INICIO',
-        'FECHA_FIN': 'FECHA_FIN',
-        'FECHA_DE_INICIO': 'FECHA_INICIO',
-        'FECHA_DE_FIN': 'FECHA_FIN',
+        'EMPRESA': 'EMPRESA',
+        'ENCARGADO': 'ENCARGADO',
+        'RUBRO': 'RUBRO',
+        'FUNCIONES /AREA': 'FUNCIONES_AREA',
+        'DOCENTE REVISOR': 'DOCENTE_REVISOR',
+        'CORREO ENVIADO': 'CORREO_ENVIADO',
+        'TIEMPO (DIAS) DE REVISON DEL DOCENTE': 'TIEMPO_REVISION',
+        'EGRESO/CICLO CURSADO': 'EGRESO_CICLO',
+        'NOMBRE DEL INFORME': 'NOMBRE_INFORME',
+        'SECTOR': 'SECTOR',
+        'TIPO': 'TIPO',
+        'FECHA DE INFORME DE CONFORMIDAD': 'FECHA_CONFORMIDAD',
+        'ESTADO': 'ESTADO',
+        'OBSERVACIÓN': 'OBSERVACION',
     }
     
-    # Aplicar mapeo
     nuevas_columnas = []
     for col in df.columns:
         col_upper = col.upper().strip()
@@ -333,38 +293,29 @@ def detectar_tipo_columna(serie):
     return 'texto'
 
 def limpiar_datos_categoricos(df, columna):
-    """Limpia datos categóricos: elimina headers, normaliza tildes, agrupa duplicados"""
+    """Limpia datos categóricos"""
     df_limpio = df.copy()
-    
-    # Obtener valores de la columna
     valores = df_limpio[columna].copy()
     
-    # 1. Eliminar filas donde el valor sea igual al nombre de la columna (header)
     valores = valores[valores.astype(str).str.upper().str.strip() != columna.upper().strip()]
     
-    # 2. Eliminar filas que parezcan headers (números puros, palabras como "cantidad", "porcentaje")
     headers_comunes = ['CANTIDAD', 'PORCENTAJE', 'TOTAL', 'COUNT', 'FRECUENCIA', 
                        'TIPO', 'ESTADO', 'SECTOR', 'NOMBRE', 'VALOR']
     
     mascara_validos = ~valores.astype(str).str.upper().str.strip().isin(headers_comunes)
     valores = valores[mascara_validos]
     
-    # 3. Eliminar valores numéricos puros (como "24")
     valores = valores[~valores.astype(str).str.match(r'^\d+$')]
     
-    # 4. Normalizar texto (quitar tildes)
     valores_normalizados = valores.apply(normalizar_texto)
     
-    # 5. Eliminar valores nulos después de normalizar
     mascara_no_nulos = valores_normalizados.notna()
     valores = valores[mascara_no_nulos]
     valores_normalizados = valores_normalizados[mascara_no_nulos]
     
-    # 6. Contar frecuencias de valores normalizados
     conteos = valores_normalizados.value_counts().reset_index()
     conteos.columns = [columna, 'Cantidad']
     
-    # 7. Calcular porcentaje
     total = conteos['Cantidad'].sum()
     if total > 0:
         conteos['Porcentaje'] = (conteos['Cantidad'] / total * 100).round(2)
@@ -377,7 +328,6 @@ def generar_grafico_numerico(df, columna):
     """Genera gráficos para columnas numéricas"""
     figs = {}
     
-    # Convertir a numérico
     df_num = df.copy()
     df_num[columna] = pd.to_numeric(df_num[columna], errors='coerce')
     df_num = df_num.dropna(subset=[columna])
@@ -385,7 +335,6 @@ def generar_grafico_numerico(df, columna):
     if len(df_num) == 0:
         return None
     
-    # Histograma
     fig_hist = px.histogram(df_num, x=columna, 
                            title=f'📊 DISTRIBUCIÓN: {columna}',
                            color_discrete_sequence=['#667eea'],
@@ -394,8 +343,8 @@ def generar_grafico_numerico(df, columna):
         height=450,
         plot_bgcolor='white',
         paper_bgcolor='white',
-        font=dict(size=13, color='#000000', family='Arial'),
-        title_font=dict(size=18, color='#000000', family='Arial'),
+        font=dict(size=13, color='#000000'),
+        title_font=dict(size=18, color='#000000'),
         xaxis_title=columna,
         yaxis_title='Frecuencia',
         showlegend=False,
@@ -406,7 +355,6 @@ def generar_grafico_numerico(df, columna):
     )
     figs['histograma'] = fig_hist
     
-    # Boxplot
     fig_box = px.box(df_num, y=columna,
                     title=f'📦 DISTRIBUCIÓN ESTADÍSTICA: {columna}',
                     color_discrete_sequence=['#f5576c'],
@@ -423,24 +371,20 @@ def generar_grafico_numerico(df, columna):
     )
     figs['boxplot'] = fig_box
     
-    # Estadísticas
     stats = df_num[columna].describe()
     figs['estadisticas'] = stats
     
     return figs
 
 def generar_grafico_categorico(df, columna):
-    """Genera gráficos para columnas categóricas con datos LIMPIOS"""
+    """Genera gráficos para columnas categóricas"""
     figs = {}
     
-    # LIMPIAR DATOS antes de generar gráficos
     conteos = limpiar_datos_categoricos(df, columna)
     
     if len(conteos) == 0:
-        st.warning(f"No hay datos válidos en la columna {columna}")
         return None
     
-    # Gráfico de barras horizontales
     fig_bar = px.bar(conteos, y=columna, x='Cantidad',
                     title=f'📊 DISTRIBUCIÓN: {columna}',
                     color='Cantidad',
@@ -463,11 +407,10 @@ def generar_grafico_categorico(df, columna):
         xaxis=dict(showgrid=True, gridcolor='#e2e8f0',
                    tickfont=dict(color='#000000', size=12)),
         yaxis=dict(showgrid=False,
-                   tickfont=dict(color='#000000', size=12, family='Arial'))
+                   tickfont=dict(color='#000000', size=12))
     )
     figs['barras'] = fig_bar
     
-    # Gráfico circular (si hay menos de 15 categorías)
     if len(conteos) <= 15:
         fig_pie = px.pie(conteos, values='Cantidad', names=columna,
                         title=f'🥧 DISTRIBUCIÓN PORCENTUAL: {columna}',
@@ -475,7 +418,7 @@ def generar_grafico_categorico(df, columna):
                         color_discrete_sequence=PALETA_PRINCIPAL)
         fig_pie.update_traces(textposition='inside',
                              textinfo='percent+label+value',
-                             textfont=dict(size=11, color='#ffffff', family='Arial'),
+                             textfont=dict(size=11, color='#ffffff'),
                              marker=dict(line=dict(color='#000000', width=2)))
         fig_pie.update_layout(
             height=500,
@@ -487,7 +430,6 @@ def generar_grafico_categorico(df, columna):
         )
         figs['circular'] = fig_pie
     
-    # Agregar porcentaje a la tabla
     figs['tabla'] = conteos
     
     return figs
@@ -497,8 +439,6 @@ def generar_grafico_temporal(df, columna):
     figs = {}
     
     df_temp = df.copy()
-    
-    # Limpiar: eliminar headers
     df_temp = df_temp[~df_temp[columna].astype(str).str.upper().str.strip().isin([columna.upper(), 'FECHA', 'DATE'])]
     
     df_temp[columna] = pd.to_datetime(df_temp[columna], errors='coerce')
@@ -558,7 +498,7 @@ def generar_grafico_temporal(df, columna):
     return figs
 
 def generar_grafico_automatico(df, columna, tipo):
-    """Genera el gráfico apropiado según el tipo de dato"""
+    """Genera el gráfico apropiado según el tipo"""
     if tipo == 'numerica':
         return generar_grafico_numerico(df, columna)
     elif tipo == 'categorica':
@@ -567,31 +507,6 @@ def generar_grafico_automatico(df, columna, tipo):
         return generar_grafico_temporal(df, columna)
     else:
         return None
-
-# ==========================================
-# FUNCIÓN PARA ELIMINAR COLUMNAS DUPLICADAS
-# ==========================================
-def eliminar_columnas_duplicadas(df):
-    """
-    Detecta y renombra columnas duplicadas agregando sufijos numéricos
-    """
-    columnas_vistas = {}
-    nuevas_columnas = []
-    
-    for col in df.columns:
-        col_str = str(col)
-        
-        # Si ya hemos visto esta columna, agregar sufijo
-        if col_str in columnas_vistas:
-            columnas_vistas[col_str] += 1
-            nueva_col = f"{col_str}_{columnas_vistas[col_str]}"
-            nuevas_columnas.append(nueva_col)
-        else:
-            columnas_vistas[col_str] = 0
-            nuevas_columnas.append(col_str)
-    
-    df.columns = nuevas_columnas
-    return df
 
 # ==========================================
 # CARGA DE DATOS
@@ -606,13 +521,15 @@ def cargar_datos():
             df_raw = pd.read_excel(io.BytesIO(response.content), sheet_name='PRACTICAS PRE', header=None)
             df = detectar_y_corregir_encabezado(df_raw)
             df = limpiar_nombres_columnas(df)
-            df = eliminar_columnas_duplicadas(df)  # ✅ AHORA SÍ FUNCIONA
+            df = eliminar_columnas_duplicadas(df)  # ✅ ELIMINA duplicados
             df = df.dropna(how='all')
             return df
         return pd.DataFrame()
     except Exception as e:
         st.error(f"Error al cargar: {e}")
         return pd.DataFrame()
+
+st_autorefresh(interval=30000, limit=100, key="refresh")
 
 # ==========================================
 # CARGAR DATOS
@@ -622,11 +539,12 @@ df = cargar_datos()
 if df.empty:
     st.error("❌ No se pudieron cargar los datos.")
     st.stop()
+
 # ==========================================
-# ANÁLISIS AUTOMÁTICO DE COLUMNAS (CON PROTECCIÓN)
+# ANÁLISIS DE COLUMNAS
 # ==========================================
 def inicializar_analisis_columnas():
-    """Inicializa el análisis de columnas de forma segura"""
+    """Inicializa el análisis de columnas"""
     analisis = {}
     for col in df.columns:
         try:
@@ -637,7 +555,7 @@ def inicializar_analisis_columnas():
                 'nulos': int(df[col].isnull().sum()),
                 'total': len(df)
             }
-        except Exception as e:
+        except:
             analisis[col] = {
                 'tipo': 'texto',
                 'unicos': 0,
@@ -646,7 +564,6 @@ def inicializar_analisis_columnas():
             }
     return analisis
 
-# Inicializar una sola vez
 if 'analisis_columnas' not in st.session_state:
     st.session_state.analisis_columnas = inicializar_analisis_columnas()
 
@@ -661,7 +578,7 @@ def navegar_a(pagina):
     st.rerun()
 
 # ==========================================
-# SIDEBAR
+# SIDEBAR CON FILTROS DINÁMICOS
 # ==========================================
 with st.sidebar:
     st.markdown("## 📊 Dashboard Inteligente")
@@ -676,6 +593,9 @@ with st.sidebar:
     if st.button("🔍 Análisis por Columna", use_container_width=True, key="nav3"):
         navegar_a('columnas')
     
+    if st.button("🎯 Análisis con Filtros", use_container_width=True, key="nav_filtros"):
+        navegar_a('filtros')
+    
     if st.button("📈 Indicadores ICACIT", use_container_width=True, key="nav4"):
         navegar_a('icacit')
     
@@ -683,16 +603,37 @@ with st.sidebar:
         navegar_a('datos')
     
     st.markdown("---")
-    st.markdown("### 📊 Resumen de Columnas")
+    st.markdown("### 🎛️ FILTROS GLOBALES")
     
-    tipos = Counter([v.get('tipo', 'texto') for v in st.session_state.analisis_columnas.values()])
+    # Crear filtros dinámicos para cada columna categórica
+    filtros_aplicados = {}
     
-    st.markdown(f"🔢 **Numéricas:** {tipos.get('numerica', 0)}")
-    st.markdown(f"📋 **Categóricas:** {tipos.get('categorica', 0)}")
-    st.markdown(f"📅 **Fechas:** {tipos.get('fecha', 0)}")
-    st.markdown(f"📝 **Texto:** {tipos.get('texto', 0)}")
-    st.markdown("---")
-    st.markdown(f"**Total columnas:** {len(df.columns)}")
+    for col in df.columns:
+        info_col = st.session_state.analisis_columnas.get(col, {})
+        tipo = info_col.get('tipo', 'texto')
+        
+        # Solo mostrar filtros para columnas categóricas con pocos valores únicos
+        if tipo == 'categorica' and info_col.get('unicos', 0) <= 30:
+            valores_unicos = sorted(df[col].dropna().unique().tolist())
+            
+            # Limpiar valores
+            valores_limpios = [v for v in valores_unicos if pd.notna(v) and str(v).strip() != '']
+            
+            if len(valores_limpios) > 0 and len(valores_limpios) <= 20:
+                seleccion = st.multiselect(
+                    f"🔹 {col}",
+                    options=valores_limpios,
+                    default=valores_limpios,
+                    key=f"filtro_{col}"
+                )
+                
+                if seleccion and len(seleccion) < len(valores_limpios):
+                    filtros_aplicados[col] = seleccion
+
+# Aplicar filtros globales
+df_filtrado = df.copy()
+for col, valores in filtros_aplicados.items():
+    df_filtrado = df_filtrado[df_filtrado[col].isin(valores)]
 
 # ==========================================
 # PÁGINA: INICIO
@@ -710,7 +651,7 @@ if st.session_state.pagina_actual == 'inicio':
     with col1:
         st.markdown(f"""
         <div class="kpi-card">
-            <p class="kpi-value">{len(df)}</p>
+            <p class="kpi-value">{len(df_filtrado)}</p>
             <p class="kpi-label">Total Registros</p>
         </div>
         """, unsafe_allow_html=True)
@@ -741,7 +682,7 @@ if st.session_state.pagina_actual == 'inicio':
         </div>
         """, unsafe_allow_html=True)
     
-    st.markdown('<p class="section-title">📋 Columnas Detectadas con Nombres Reales</p>', unsafe_allow_html=True)
+    st.markdown('<p class="section-title">📋 Columnas Detectadas</p>', unsafe_allow_html=True)
     
     for tipo_nombre, tipo_valor in [('Numéricas', 'numerica'), ('Categóricas', 'categorica'), ('Fechas', 'fecha')]:
         cols = [col for col, info in st.session_state.analisis_columnas.items() if info.get('tipo') == tipo_valor]
@@ -759,13 +700,13 @@ elif st.session_state.pagina_actual == 'auto':
     st.markdown("""
     <div class="main-header">
         <h1>📊 Análisis Automático Inteligente</h1>
-        <p>Gráficos generados automáticamente con títulos siempre visibles</p>
+        <p>Gráficos generados automáticamente</p>
     </div>
     """, unsafe_allow_html=True)
     
     st.markdown('<p class="section-title">🎯 Gráficos por Columna</p>', unsafe_allow_html=True)
     
-    for col in df.columns:
+    for col in df_filtrado.columns:
         info_col = st.session_state.analisis_columnas.get(col, {})
         tipo = info_col.get('tipo', 'texto')
         unicos = info_col.get('unicos', 0)
@@ -776,7 +717,7 @@ elif st.session_state.pagina_actual == 'auto':
             with st.expander(expander_title, expanded=False):
                 st.markdown(f'<p class="sub-title">Análisis de: {col}</p>', unsafe_allow_html=True)
                 
-                graficos = generar_grafico_automatico(df, col, tipo)
+                graficos = generar_grafico_automatico(df_filtrado, col, tipo)
                 
                 if graficos:
                     if tipo == 'numerica':
@@ -809,18 +750,15 @@ elif st.session_state.pagina_actual == 'columnas':
     st.markdown("""
     <div class="main-header">
         <h1>🔍 Análisis Detallado por Columna</h1>
-        <p>Selecciona una columna específica para ver su análisis completo</p>
+        <p>Selecciona una columna específica</p>
     </div>
     """, unsafe_allow_html=True)
     
-    # ✅ PROTECCIÓN: Verificar que haya columnas disponibles
-    if len(df.columns) == 0:
-        st.warning("No hay columnas disponibles para analizar.")
+    if len(df_filtrado.columns) == 0:
+        st.warning("No hay columnas disponibles.")
         st.stop()
     
-    # ✅ SOLUCIÓN DEL ERROR: Usar .get() con valor por defecto
     def format_columna(x):
-        """Función segura para formatear el nombre de la columna"""
         try:
             info = st.session_state.analisis_columnas.get(x, {})
             tipo = info.get('tipo', 'desconocido')
@@ -830,13 +768,12 @@ elif st.session_state.pagina_actual == 'columnas':
     
     col_seleccionada = st.selectbox(
         "Selecciona una columna:",
-        options=list(df.columns),
+        options=list(df_filtrado.columns),
         format_func=format_columna,
         key="selectbox_columna"
     )
     
     if col_seleccionada:
-        # ✅ Obtener info de forma segura
         info_col = st.session_state.analisis_columnas.get(col_seleccionada, {})
         tipo = info_col.get('tipo', 'texto')
         unicos = info_col.get('unicos', 0)
@@ -845,7 +782,7 @@ elif st.session_state.pagina_actual == 'columnas':
         st.markdown(f'<p class="section-title">📊 Análisis de: {col_seleccionada}</p>', unsafe_allow_html=True)
         st.info(f"**Tipo:** {tipo.upper()} | **Valores únicos:** {unicos} | **Nulos:** {nulos}")
         
-        graficos = generar_grafico_automatico(df, col_seleccionada, tipo)
+        graficos = generar_grafico_automatico(df_filtrado, col_seleccionada, tipo)
         
         if graficos:
             if tipo == 'numerica':
@@ -870,6 +807,92 @@ elif st.session_state.pagina_actual == 'columnas':
                     st.plotly_chart(graficos['por_año'], use_container_width=True)
 
 # ==========================================
+# PÁGINA: ANÁLISIS CON FILTROS (NUEVA)
+# ==========================================
+elif st.session_state.pagina_actual == 'filtros':
+    st.markdown("""
+    <div class="main-header">
+        <h1>🎯 Análisis con Filtros Dinámicos</h1>
+        <p>Usa los filtros del sidebar para analizar datos específicos</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.markdown(f"**📊 Registros filtrados:** {len(df_filtrado)} de {len(df)}")
+    
+    if len(filtros_aplicados) > 0:
+        st.markdown("### 🔍 Filtros Aplicados:")
+        for col, valores in filtros_aplicados.items():
+            st.write(f"**{col}:** {', '.join(str(v) for v in valores[:5])}{'...' if len(valores) > 5 else ''}")
+    
+    st.markdown('<p class="section-title">📈 Gráficos Estadísticos con Filtros</p>', unsafe_allow_html=True)
+    
+    # Selector de columnas para graficar
+    col_x = st.selectbox(
+        "Selecciona columna para el eje X (categoría):",
+        options=[col for col, info in st.session_state.analisis_columnas.items() 
+                if info.get('tipo') in ['categorica', 'texto']],
+        key="filtro_col_x"
+    )
+    
+    col_y = st.selectbox(
+        "Selecciona columna para el eje Y (numérica):",
+        options=[col for col, info in st.session_state.analisis_columnas.items() 
+                if info.get('tipo') == 'numerica'],
+        key="filtro_col_y"
+    )
+    
+    if col_x and col_y:
+        # Preparar datos
+        df_plot = df_filtrado.copy()
+        df_plot[col_y] = pd.to_numeric(df_plot[col_y], errors='coerce')
+        df_plot = df_plot.dropna(subset=[col_x, col_y])
+        
+        if len(df_plot) > 0:
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                # Gráfico de barras agrupadas
+                df_agg = df_plot.groupby(col_x)[col_y].agg(['mean', 'sum', 'count']).reset_index()
+                df_agg.columns = [col_x, 'Promedio', 'Suma', 'Cantidad']
+                
+                fig_bar = px.bar(df_agg, x=col_x, y='Suma',
+                               title=f'📊 {col_y} por {col_x}',
+                               color='Cantidad',
+                               color_continuous_scale='Viridis',
+                               text='Cantidad')
+                fig_bar.update_traces(textposition='outside')
+                fig_bar.update_layout(
+                    height=500,
+                    plot_bgcolor='white',
+                    paper_bgcolor='white',
+                    font=dict(size=12, color='#000000'),
+                    title_font=dict(size=16, color='#000000'),
+                    xaxis_tickangle=-45
+                )
+                st.plotly_chart(fig_bar, use_container_width=True)
+            
+            with col2:
+                # Boxplot
+                fig_box = px.box(df_plot, x=col_x, y=col_y,
+                               title=f'📦 Distribución de {col_y} por {col_x}',
+                               color=col_x,
+                               color_discrete_sequence=PALETA_PRINCIPAL)
+                fig_box.update_layout(
+                    height=500,
+                    plot_bgcolor='white',
+                    paper_bgcolor='white',
+                    font=dict(size=12, color='#000000'),
+                    title_font=dict(size=16, color='#000000'),
+                    xaxis_tickangle=-45,
+                    showlegend=False
+                )
+                st.plotly_chart(fig_box, use_container_width=True)
+            
+            # Tabla de estadísticas
+            st.markdown("### 📋 Estadísticas por Categoría")
+            st.dataframe(df_agg, use_container_width=True, hide_index=True)
+
+# ==========================================
 # PÁGINA: INDICADORES ICACIT
 # ==========================================
 elif st.session_state.pagina_actual == 'icacit':
@@ -880,17 +903,17 @@ elif st.session_state.pagina_actual == 'icacit':
     </div>
     """, unsafe_allow_html=True)
     
-    col_estado = next((col for col in df.columns if 'ESTADO' in col.upper()), None)
-    col_sector = next((col for col in df.columns if 'SECTOR' in col.upper()), None)
-    col_duracion = next((col for col in df.columns if 'DURACION' in col.upper() or 'DURACIÓN' in col.upper()), None)
-    col_año = next((col for col in df.columns if 'AÑO' in col.upper()), None)
+    col_estado = next((col for col in df_filtrado.columns if 'ESTADO' in col.upper()), None)
+    col_sector = next((col for col in df_filtrado.columns if 'SECTOR' in col.upper()), None)
+    col_duracion = next((col for col in df_filtrado.columns if 'DURACION' in col.upper()), None)
+    col_año = next((col for col in df_filtrado.columns if 'AÑO' in col.upper()), None)
     
     if col_estado and col_año:
         st.markdown('<p class="section-title">📊 Tasa de Culminación por Año</p>', unsafe_allow_html=True)
         
         tasas = []
-        for año in sorted(df[col_año].dropna().unique()):
-            df_año = df[df[col_año] == año]
+        for año in sorted(df_filtrado[col_año].dropna().unique()):
+            df_año = df_filtrado[df_filtrado[col_año] == año]
             total = len(df_año)
             terminados = len(df_año[df_año[col_estado].astype(str).str.upper().str.contains('TERMINADO', na=False)])
             tasa = (terminados / total * 100) if total > 0 else 0
@@ -907,9 +930,7 @@ elif st.session_state.pagina_actual == 'icacit':
                         text='Tasa (%)')
             fig.update_traces(textposition='outside')
             fig.update_layout(yaxis_range=[0, 100], height=450,
-                            plot_bgcolor='white', paper_bgcolor='white',
-                            font=dict(size=13, color='#000000'),
-                            title_font=dict(size=18, color='#000000'))
+                            plot_bgcolor='white', paper_bgcolor='white')
             st.plotly_chart(fig, use_container_width=True)
         with col2:
             st.dataframe(df_tasas, use_container_width=True, hide_index=True)
@@ -917,7 +938,7 @@ elif st.session_state.pagina_actual == 'icacit':
     if col_sector:
         st.markdown('<p class="section-title">🏢 Distribución por Sector</p>', unsafe_allow_html=True)
         
-        sector_stats = df[col_sector].value_counts().reset_index()
+        sector_stats = df_filtrado[col_sector].value_counts().reset_index()
         sector_stats.columns = ['Sector', 'Cantidad']
         sector_stats['Porcentaje'] = (sector_stats['Cantidad'] / sector_stats['Cantidad'].sum() * 100).round(1)
         
@@ -928,9 +949,7 @@ elif st.session_state.pagina_actual == 'icacit':
                         hole=0.4,
                         color_discrete_sequence=PALETA_PRINCIPAL)
             fig.update_traces(textposition='inside', textinfo='percent+label+value')
-            fig.update_layout(height=450, plot_bgcolor='white', paper_bgcolor='white',
-                            font=dict(size=13, color='#000000'),
-                            title_font=dict(size=18, color='#000000'))
+            fig.update_layout(height=450, plot_bgcolor='white', paper_bgcolor='white')
             st.plotly_chart(fig, use_container_width=True)
         with col2:
             st.dataframe(sector_stats, use_container_width=True, hide_index=True)
@@ -938,7 +957,7 @@ elif st.session_state.pagina_actual == 'icacit':
     if col_duracion:
         st.markdown('<p class="section-title">⏱️ Duración de Prácticas</p>', unsafe_allow_html=True)
         
-        df_dur = df.copy()
+        df_dur = df_filtrado.copy()
         df_dur['DURACION_NUM'] = pd.to_numeric(df_dur[col_duracion], errors='coerce')
         
         col1, col2, col3, col4 = st.columns(4)
@@ -962,9 +981,11 @@ elif st.session_state.pagina_actual == 'datos':
     </div>
     """, unsafe_allow_html=True)
     
-    st.dataframe(df, use_container_width=True, height=600)
+    st.markdown(f"**📊 Registros:** {len(df_filtrado)}")
     
-    csv = df.to_csv(index=False).encode('utf-8')
+    st.dataframe(df_filtrado, use_container_width=True, height=600)
+    
+    csv = df_filtrado.to_csv(index=False).encode('utf-8')
     st.download_button(
         label="📥 Descargar CSV",
         data=csv,
@@ -979,7 +1000,7 @@ elif st.session_state.pagina_actual == 'datos':
 st.markdown("""
 <div class="footer">
     <p><strong>🎓 Universidad Privada de Tacna</strong> - Escuela de Ingeniería de Sistemas</p>
-    <p>📊 Dashboard Inteligente con Visualización Automática | Acreditación ICACIT</p>
+    <p>📊 Dashboard Inteligente con Filtros Dinámicos | Acreditación ICACIT</p>
     <p>Actualizado: {fecha}</p>
 </div>
 """.format(fecha=datetime.now().strftime('%d/%m/%Y %H:%M:%S')), unsafe_allow_html=True)
