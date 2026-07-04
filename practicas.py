@@ -569,31 +569,8 @@ def generar_grafico_automatico(df, columna, tipo):
         return None
 
 # ==========================================
-# CARGA DE DATOS
+# FUNCIÓN PARA ELIMINAR COLUMNAS DUPLICADAS
 # ==========================================
-URL_EXCEL = "https://uptpe-my.sharepoint.com/personal/sistemas_upt_pe/_layouts/15/download.aspx?share=IQAOIPpSBepgQKXqK5_pr0xZASDwWyblJ-22PdBsf-qLSfQ"
-
-@st.cache_data(ttl=30)
-def cargar_datos():
-    try:
-        response = requests.get(URL_EXCEL)
-        if response.status_code == 200:
-            df_raw = pd.read_excel(io.BytesIO(response.content), sheet_name='PRACTICAS PRE', header=None)
-            df = detectar_y_corregir_encabezado(df_raw)
-            df = limpiar_nombres_columnas(df)
-            df = eliminar_columnas_duplicadas(df)  # ✅ AGREGAR ESTA LÍNEA
-            df = df.dropna(how='all')
-            return df
-        return pd.DataFrame()
-    except Exception as e:
-        st.error(f"Error al cargar: {e}")
-        return pd.DataFrame()
-
-# ==========================================
-# CARGAR DATOS
-# ==========================================
-df = cargar_datos()
-
 def eliminar_columnas_duplicadas(df):
     """
     Detecta y renombra columnas duplicadas agregando sufijos numéricos
@@ -616,10 +593,35 @@ def eliminar_columnas_duplicadas(df):
     df.columns = nuevas_columnas
     return df
 
+# ==========================================
+# CARGA DE DATOS
+# ==========================================
+URL_EXCEL = "https://uptpe-my.sharepoint.com/personal/sistemas_upt_pe/_layouts/15/download.aspx?share=IQAOIPpSBepgQKXqK5_pr0xZASDwWyblJ-22PdBsf-qLSfQ"
+
+@st.cache_data(ttl=30)
+def cargar_datos():
+    try:
+        response = requests.get(URL_EXCEL)
+        if response.status_code == 200:
+            df_raw = pd.read_excel(io.BytesIO(response.content), sheet_name='PRACTICAS PRE', header=None)
+            df = detectar_y_corregir_encabezado(df_raw)
+            df = limpiar_nombres_columnas(df)
+            df = eliminar_columnas_duplicadas(df)  # ✅ AHORA SÍ FUNCIONA
+            df = df.dropna(how='all')
+            return df
+        return pd.DataFrame()
+    except Exception as e:
+        st.error(f"Error al cargar: {e}")
+        return pd.DataFrame()
+
+# ==========================================
+# CARGAR DATOS
+# ==========================================
+df = cargar_datos()
+
 if df.empty:
     st.error("❌ No se pudieron cargar los datos.")
     st.stop()
-
 # ==========================================
 # ANÁLISIS AUTOMÁTICO DE COLUMNAS (CON PROTECCIÓN)
 # ==========================================
