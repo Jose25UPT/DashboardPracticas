@@ -614,21 +614,36 @@ with st.sidebar:
         
         # Solo mostrar filtros para columnas categóricas con pocos valores únicos
         if tipo == 'categorica' and info_col.get('unicos', 0) <= 30:
-            valores_unicos = sorted(df[col].dropna().unique().tolist())
-            
-            # Limpiar valores
-            valores_limpios = [v for v in valores_unicos if pd.notna(v) and str(v).strip() != '']
-            
-            if len(valores_limpios) > 0 and len(valores_limpios) <= 20:
-                seleccion = st.multiselect(
-                    f"🔹 {col}",
-                    options=valores_limpios,
-                    default=valores_limpios,
-                    key=f"filtro_{col}"
-                )
+            try:
+                # Obtener valores únicos y limpiarlos
+                valores_unicos_raw = df[col].dropna().unique().tolist()
                 
-                if seleccion and len(seleccion) < len(valores_limpios):
-                    filtros_aplicados[col] = seleccion
+                # Función segura para ordenar valores mezclados
+                def ordenar_valores(lista):
+                    try:
+                        return sorted(lista)
+                    except TypeError:
+                        return sorted([str(v) for v in lista])
+                
+                valores_unicos = ordenar_valores(valores_unicos_raw)
+                
+                # Limpiar valores
+                valores_limpios = [v for v in valores_unicos if pd.notna(v) and str(v).strip() != '']
+                
+                if len(valores_limpios) > 0 and len(valores_limpios) <= 20:
+                    seleccion = st.multiselect(
+                        f"🔹 {col}",
+                        options=valores_limpios,
+                        default=valores_limpios,
+                        key=f"filtro_{col}"
+                    )
+                    
+                    if seleccion and len(seleccion) < len(valores_limpios):
+                        filtros_aplicados[col] = seleccion
+            except Exception as e:
+                # Si algo falla, simplemente no mostrar este filtro
+                print(f"No se pudo crear filtro para {col}: {e}")
+                continue
 
 # Aplicar filtros globales
 df_filtrado = df.copy()
