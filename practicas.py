@@ -167,6 +167,34 @@ def normalizar_texto(valor):
     return texto
 
 
+def limitar_a_tabla_principal(df_raw, fila_header):
+    """
+    NUEVO: en archivos como REGISTRO_PRACTICAS_Y_TESIS, a la derecha de la
+    tabla real de registros suele haber una tabla auxiliar pegada en el mismo
+    sheet (ej. un resumen de "Atenciones por mes" con su propio mini-header),
+    que NO corresponde a los registros fila por fila.
+
+    Esta función identifica el bloque REAL de la tabla como el tramo contiguo
+    de columnas con encabezado no vacío, empezando desde la primera columna
+    con encabezado. En cuanto encuentra una columna con encabezado vacío,
+    corta ahí — cualquier columna después de ese punto (aunque tenga texto
+    suelto como "EN PROCESO" o "PRIVADO") se descarta por pertenecer a una
+    tabla auxiliar distinta, no a los registros.
+    """
+    fila = df_raw.iloc[fila_header]
+    n = len(fila)
+
+    inicio = 0
+    while inicio < n and (pd.isna(fila.iloc[inicio]) or str(fila.iloc[inicio]).strip() == ''):
+        inicio += 1
+
+    fin = inicio
+    while fin < n and not (pd.isna(fila.iloc[fin]) or str(fila.iloc[fin]).strip() == ''):
+        fin += 1
+
+    return df_raw.iloc[:, inicio:fin]
+
+
 def detectar_y_corregir_encabezado(df_raw):
     """Detecta automáticamente la fila de encabezado y usa nombres reales"""
     if len(df_raw) == 0:
@@ -193,6 +221,7 @@ def detectar_y_corregir_encabezado(df_raw):
             mejor_fila_header = idx_fila
 
     if max_puntuacion > 0:
+        df_raw = limitar_a_tabla_principal(df_raw, mejor_fila_header)
         headers = df_raw.iloc[mejor_fila_header].tolist()
         headers_limpios = []
         for i, h in enumerate(headers):
