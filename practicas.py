@@ -1,0 +1,802 @@
+import streamlit as st
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
+import io
+import requests
+from streamlit_autorefresh import st_autorefresh
+from datetime import datetime
+import numpy as np
+from collections import Counter
+
+# ==========================================
+# CONFIGURACIÓN DE PÁGINA
+# ==========================================
+st.set_page_config(
+    page_title="Dashboard Inteligente - Prácticas UPT",
+    page_icon="📊",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# ==========================================
+# ESTILOS CSS CORREGIDOS - TODO EN NEGRO
+# ==========================================
+st.markdown("""
+<style>
+    /* Fondo general */
+    .stApp {
+        background: #f5f7fa !important;
+    }
+    
+    /* TODO el texto del contenido principal en NEGRO */
+    .stApp * {
+        color: #000000 !important;
+    }
+    
+    /* Header principal */
+    .main-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 2rem;
+        border-radius: 15px;
+        text-align: center;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        margin-bottom: 2rem;
+    }
+    
+    .main-header h1 {
+        margin: 0;
+        font-size: 2.2rem;
+        font-weight: 700;
+        color: #ffffff !important;
+    }
+    
+    .main-header p {
+        color: #ffffff !important;
+        font-size: 1.1rem;
+    }
+    
+    /* Títulos de sección - NEGRO sobre fondo blanco */
+    .section-title {
+        color: #000000 !important;
+        font-size: 1.6rem;
+        font-weight: 700;
+        border-left: 5px solid #667eea;
+        padding: 1rem;
+        margin: 2rem 0 1.5rem 0;
+        background: #ffffff;
+        border-radius: 10px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    
+    /* Subtítulos - NEGRO */
+    .sub-title {
+        color: #000000 !important;
+        font-size: 1.3rem;
+        font-weight: 600;
+        margin: 1.5rem 0 1rem 0;
+    }
+    
+    /* Tarjetas KPI */
+    .kpi-card {
+        background: #ffffff;
+        padding: 1.5rem;
+        border-radius: 15px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        border-left: 5px solid #667eea;
+        text-align: center;
+        transition: all 0.3s ease;
+    }
+    
+    .kpi-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+    }
+    
+    .kpi-value {
+        font-size: 2.5rem;
+        font-weight: 800;
+        color: #667eea !important;
+        margin: 0.5rem 0;
+    }
+    
+    .kpi-label {
+        font-size: 0.85rem;
+        color: #000000 !important;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        font-weight: 600;
+    }
+    
+    /* Sidebar - fondo oscuro con texto blanco */
+    [data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #1a202c 0%, #2d3748 100%) !important;
+    }
+    
+    [data-testid="stSidebar"] * {
+        color: #ffffff !important;
+    }
+    
+    [data-testid="stSidebar"] .stButton > button {
+        background: rgba(255,255,255,0.1) !important;
+        color: #ffffff !important;
+        border: 1px solid rgba(255,255,255,0.2) !important;
+    }
+    
+    /* Footer */
+    .footer {
+        text-align: center;
+        padding: 1.5rem;
+        color: #000000 !important;
+        font-size: 0.85rem;
+        margin-top: 3rem;
+        border-top: 2px solid #667eea;
+        background: #ffffff;
+        border-radius: 10px;
+    }
+    
+    /* Info boxes */
+    .info-box {
+        background: #e6f3ff;
+        border-left: 4px solid #667eea;
+        padding: 1rem;
+        border-radius: 5px;
+        margin: 1rem 0;
+        color: #000000 !important;
+    }
+    
+    /* Expanders */
+    .streamlit-expanderHeader {
+        background: #ffffff !important;
+        color: #000000 !important;
+        font-weight: 600 !important;
+    }
+    
+    /* Tablas */
+    .stDataFrame {
+        background: #ffffff !important;
+    }
+    
+    /* Métricas */
+    [data-testid="stMetric"] {
+        background: #ffffff !important;
+        padding: 1rem;
+        border-radius: 10px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    
+    [data-testid="stMetricLabel"] {
+        color: #000000 !important;
+    }
+    
+    [data-testid="stMetricValue"] {
+        color: #667eea !important;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# ==========================================
+# FUNCIÓN PARA LIMPIAR NOMBRES DE COLUMNAS
+# ==========================================
+
+def limpiar_nombres_columnas(df):
+    """Limpia y renombra columnas UNNAMED con nombres descriptivos"""
+    mapeo_nombres = {
+        'UNNAMED: 0': 'NRO_FILA',
+        'UNNAMED: 1': 'AÑO_REGISTRO',
+        'UNNAMED: 2': 'NRO_REGISTRO',
+        'UNNAMED: 3': 'NRO_CARTA',
+        'UNNAMED: 4': 'CODIGO',
+        'UNNAMED: 5': 'DNI',
+        'UNNAMED: 6': 'NOMBRE',
+        'UNNAMED: 7': 'CELULAR',
+        'UNNAMED: 8': 'EMAIL',
+        'UNNAMED: 9': 'DIRECCION',
+        'UNNAMED: 10': 'FECHA_INICIO',
+        'UNNAMED: 11': 'FECHA_FIN',
+        'UNNAMED: 12': 'DURACION',
+        'UNNAMED: 13': 'EMPRESA',
+        'UNNAMED: 14': 'ENCARGADO',
+        'UNNAMED: 15': 'RUBRO',
+        'UNNAMED: 16': 'FUNCIONES_AREA',
+        'UNNAMED: 17': 'DOCENTE_REVISOR',
+        'UNNAMED: 18': 'CORREO_ENVIADO',
+        'UNNAMED: 19': 'TIEMPO_REVISION',
+        'UNNAMED: 20': 'EGRESO_CICLO',
+        'UNNAMED: 21': 'NOMBRE_INFORME',
+        'UNNAMED: 22': 'EMPRESA_NOMBRE',
+        'UNNAMED: 23': 'SECTOR',
+        'UNNAMED: 24': 'TIPO',
+        'UNNAMED: 25': 'FECHA_CONFORMIDAD',
+        'UNNAMED: 26': 'ESTADO',
+        'UNNAMED: 27': 'OBSERVACION',
+    }
+    
+    df = df.rename(columns=mapeo_nombres)
+    
+    nuevas_columnas = []
+    for i, col in enumerate(df.columns):
+        if 'UNNAMED' in str(col).upper() or col == '' or pd.isna(col):
+            nuevas_columnas.append(f'COLUMNA_{i+1}')
+        else:
+            nuevas_columnas.append(str(col).strip().upper())
+    
+    df.columns = nuevas_columnas
+    
+    return df
+
+def detectar_y_corregir_encabezado(df_raw):
+    """Detecta si la primera fila tiene nombres reales o es data"""
+    primera_fila = df_raw.iloc[0] if len(df_raw) > 0 else None
+    
+    if primera_fila is not None:
+        es_encabezado = 0
+        for val in primera_fila:
+            if isinstance(val, str) and len(val) < 50 and 'unnamed' not in val.lower():
+                es_encabezado += 1
+        
+        if es_encabezado > len(primera_fila) * 0.5:
+            nuevos_headers = [str(v).strip().upper() if pd.notna(v) and str(v).strip() != '' else f'COL_{i}' 
+                            for i, v in enumerate(primera_fila)]
+            df = df_raw.iloc[1:].copy()
+            df.columns = nuevos_headers
+            return df
+    
+    return df_raw
+
+# ==========================================
+# FUNCIONES DE ANÁLISIS
+# ==========================================
+
+PALETA_PRINCIPAL = ['#667eea', '#764ba2', '#f093fb', '#f5576c', '#4facfe', '#00f2fe', 
+                    '#43e97b', '#38f9d7', '#fa709a', '#fee140', '#30cfd0', '#330867']
+
+def detectar_tipo_columna(serie):
+    serie_limpia = serie.dropna()
+    
+    if len(serie_limpia) == 0:
+        return 'vacia'
+    
+    if pd.api.types.is_numeric_dtype(serie_limpia):
+        return 'numerica'
+    
+    try:
+        pd.to_numeric(serie_limpia)
+        return 'numerica'
+    except:
+        pass
+    
+    try:
+        pd.to_datetime(serie_limpia)
+        return 'fecha'
+    except:
+        pass
+    
+    unicidad = serie_limpia.nunique() / len(serie_limpia)
+    if unicidad < 0.1 or serie_limpia.nunique() < 20:
+        return 'categorica'
+    
+    return 'texto'
+
+def generar_grafico_automatico(df, columna, tipo):
+    if tipo == 'numerica':
+        return generar_grafico_numerico(df, columna)
+    elif tipo == 'categorica':
+        return generar_grafico_categorico(df, columna)
+    elif tipo == 'fecha':
+        return generar_grafico_temporal(df, columna)
+    else:
+        return None
+
+def generar_grafico_numerico(df, columna):
+    figs = {}
+    
+    fig_hist = px.histogram(df, x=columna, 
+                           title=f'📊 DISTRIBUCIÓN: {columna}',
+                           color_discrete_sequence=['#667eea'],
+                           opacity=0.9)
+    fig_hist.update_layout(
+        height=450,
+        plot_bgcolor='white',
+        paper_bgcolor='white',
+        font=dict(size=13, color='#000000', family='Arial'),
+        title_font=dict(size=18, color='#000000', family='Arial'),
+        xaxis_title=columna,
+        yaxis_title='Frecuencia',
+        showlegend=False,
+        xaxis=dict(showgrid=True, gridcolor='#e2e8f0', 
+                   tickfont=dict(color='#000000', size=12)),  # ✅ NEGRO
+        yaxis=dict(showgrid=True, gridcolor='#e2e8f0',
+                   tickfont=dict(color='#000000', size=12))  # ✅ NEGRO
+    )
+    figs['histograma'] = fig_hist
+    
+    fig_box = px.box(df, y=columna,
+                    title=f'📦 DISTRIBUCIÓN ESTADÍSTICA: {columna}',
+                    color_discrete_sequence=['#f5576c'],
+                    points='all')
+    fig_box.update_layout(
+        height=450,
+        plot_bgcolor='white',
+        paper_bgcolor='white',
+        font=dict(size=13, color='#000000'),
+        title_font=dict(size=18, color='#000000'),
+        yaxis_title=columna,
+        yaxis=dict(showgrid=True, gridcolor='#e2e8f0',
+                   tickfont=dict(color='#000000', size=12))  # ✅ NEGRO
+    )
+    figs['boxplot'] = fig_box
+    
+    stats = df[columna].describe()
+    figs['estadisticas'] = stats
+    
+    return figs
+
+def generar_grafico_categorico(df, columna):
+    figs = {}
+    
+    conteos = df[columna].value_counts().reset_index()
+    conteos.columns = [columna, 'Cantidad']
+    
+    fig_bar = px.bar(conteos, y=columna, x='Cantidad',
+                    title=f'📊 DISTRIBUCIÓN: {columna}',
+                    color='Cantidad',
+                    color_continuous_scale='Viridis',
+                    text='Cantidad',
+                    orientation='h')
+    fig_bar.update_traces(textposition='outside',
+                         marker_line_color='#000000',
+                         marker_line_width=1)
+    fig_bar.update_layout(
+        height=max(400, len(conteos) * 35),
+        plot_bgcolor='white',
+        paper_bgcolor='white',
+        font=dict(size=12, color='#000000'),
+        title_font=dict(size=18, color='#000000'),
+        xaxis_title='Cantidad',
+        yaxis_title=columna,
+        showlegend=False,
+        margin=dict(l=200, r=50, t=80, b=50),
+        xaxis=dict(showgrid=True, gridcolor='#e2e8f0',
+                   tickfont=dict(color='#000000', size=12)),  # ✅ NEGRO
+        yaxis=dict(showgrid=False,
+                   tickfont=dict(color='#000000', size=12, family='Arial'))  # ✅ NEGRO
+    )
+    figs['barras'] = fig_bar
+    
+    if len(conteos) <= 15:
+        fig_pie = px.pie(conteos, values='Cantidad', names=columna,
+                        title=f' DISTRIBUCIÓN PORCENTUAL: {columna}',
+                        hole=0.4,
+                        color_discrete_sequence=PALETA_PRINCIPAL)
+        fig_pie.update_traces(textposition='inside',
+                             textinfo='percent+label+value',
+                             textfont=dict(size=11, color='#ffffff', family='Arial'),
+                             marker=dict(line=dict(color='#000000', width=2)))
+        fig_pie.update_layout(
+            height=500,
+            plot_bgcolor='white',
+            paper_bgcolor='white',
+            font=dict(size=12, color='#000000'),
+            title_font=dict(size=18, color='#000000'),
+            legend=dict(font=dict(size=11, color='#000000'), bgcolor='white')  # ✅ NEGRO
+        )
+        figs['circular'] = fig_pie
+    
+    conteos['Porcentaje'] = (conteos['Cantidad'] / conteos['Cantidad'].sum() * 100).round(2)
+    figs['tabla'] = conteos
+    
+    return figs
+
+def generar_grafico_temporal(df, columna):
+    figs = {}
+    
+    df_temp = df.copy()
+    df_temp[columna] = pd.to_datetime(df_temp[columna], errors='coerce')
+    df_temp = df_temp.dropna(subset=[columna])
+    
+    if len(df_temp) == 0:
+        return None
+    
+    df_temp['Año-Mes'] = df_temp[columna].dt.to_period('M').astype(str)
+    
+    evol = df_temp.groupby('Año-Mes').size().reset_index(name='Cantidad')
+    
+    fig_line = px.line(evol, x='Año-Mes', y='Cantidad',
+                      title=f'📈 EVOLUCIÓN TEMPORAL: {columna}',
+                      markers=True)
+    fig_line.update_traces(line=dict(color='#667eea', width=3),
+                          marker=dict(size=8, color='#f5576c'))
+    fig_line.update_layout(
+        height=450,
+        plot_bgcolor='white',
+        paper_bgcolor='white',
+        font=dict(size=13, color='#000000'),
+        title_font=dict(size=18, color='#000000'),
+        xaxis_title='Período',
+        yaxis_title='Cantidad',
+        xaxis=dict(tickangle=-45, showgrid=True, gridcolor='#e2e8f0',
+                   tickfont=dict(color='#000000', size=12)),  # ✅ NEGRO
+        yaxis=dict(showgrid=True, gridcolor='#e2e8f0',
+                   tickfont=dict(color='#000000', size=12))  # ✅ NEGRO
+    )
+    figs['evolucion'] = fig_line
+    
+    df_temp['Año'] = df_temp[columna].dt.year
+    por_año = df_temp.groupby('Año').size().reset_index(name='Cantidad')
+    
+    fig_bar = px.bar(por_año, x='Año', y='Cantidad',
+                    title=f'📊 DISTRIBUCIÓN POR AÑO: {columna}',
+                    color='Cantidad',
+                    color_continuous_scale='Plasma',
+                    text='Cantidad')
+    fig_bar.update_traces(textposition='outside')
+    fig_bar.update_layout(
+        height=450,
+        plot_bgcolor='white',
+        paper_bgcolor='white',
+        font=dict(size=13, color='#000000'),
+        title_font=dict(size=18, color='#000000'),
+        xaxis_title='Año',
+        yaxis_title='Cantidad',
+        xaxis=dict(showgrid=True, gridcolor='#e2e8f0',
+                   tickfont=dict(color='#000000', size=12)),  # ✅ NEGRO
+        yaxis=dict(showgrid=True, gridcolor='#e2e8f0',
+                   tickfont=dict(color='#000000', size=12))  # ✅ NEGRO
+    )
+    figs['por_año'] = fig_bar
+    
+    return figs
+
+# ==========================================
+# CARGA DE DATOS
+# ==========================================
+URL_EXCEL = "https://uptpe-my.sharepoint.com/personal/sistemas_upt_pe/_layouts/15/download.aspx?share=IQAOIPpSBepgQKXqK5_pr0xZASDwWyblJ-22PdBsf-qLSfQ"
+
+@st.cache_data(ttl=30)
+def cargar_datos():
+    try:
+        response = requests.get(URL_EXCEL)
+        if response.status_code == 200:
+            df_raw = pd.read_excel(io.BytesIO(response.content), sheet_name='PRACTICAS PRE', header=None)
+            df = detectar_y_corregir_encabezado(df_raw)
+            df = limpiar_nombres_columnas(df)
+            df = df.dropna(how='all')
+            return df
+        return pd.DataFrame()
+    except Exception as e:
+        st.error(f"Error al cargar: {e}")
+        return pd.DataFrame()
+
+st_autorefresh(interval=30000, limit=100, key="refresh")
+
+# ==========================================
+# CARGAR DATOS
+# ==========================================
+df = cargar_datos()
+
+if df.empty:
+    st.error("❌ No se pudieron cargar los datos.")
+    st.stop()
+
+# Análisis automático de columnas
+if 'analisis_columnas' not in st.session_state:
+    st.session_state.analisis_columnas = {}
+    for col in df.columns:
+        tipo = detectar_tipo_columna(df[col])
+        st.session_state.analisis_columnas[col] = {
+            'tipo': tipo,
+            'unicos': df[col].nunique(),
+            'nulos': df[col].isnull().sum(),
+            'total': len(df)
+        }
+
+# ==========================================
+# NAVEGACIÓN
+# ==========================================
+if 'pagina_actual' not in st.session_state:
+    st.session_state.pagina_actual = 'inicio'
+
+def navegar_a(pagina):
+    st.session_state.pagina_actual = pagina
+    st.rerun()
+
+# ==========================================
+# SIDEBAR
+# ==========================================
+with st.sidebar:
+    st.markdown("## 📊 Dashboard Inteligente")
+    st.markdown("---")
+    
+    if st.button(" Inicio", use_container_width=True, key="nav1"):
+        navegar_a('inicio')
+    
+    if st.button("📊 Análisis Automático", use_container_width=True, key="nav2"):
+        navegar_a('auto')
+    
+    if st.button("🔍 Análisis por Columna", use_container_width=True, key="nav3"):
+        navegar_a('columnas')
+    
+    if st.button("📈 Indicadores ICACIT", use_container_width=True, key="nav4"):
+        navegar_a('icacit')
+    
+    if st.button(" Datos Completos", use_container_width=True, key="nav5"):
+        navegar_a('datos')
+    
+    st.markdown("---")
+    st.markdown("### 📊 Resumen de Columnas")
+    
+    tipos = Counter([v['tipo'] for v in st.session_state.analisis_columnas.values()])
+    
+    st.markdown(f"🔢 **Numéricas:** {tipos.get('numerica', 0)}")
+    st.markdown(f"📋 **Categóricas:** {tipos.get('categorica', 0)}")
+    st.markdown(f"📅 **Fechas:** {tipos.get('fecha', 0)}")
+    st.markdown(f"📝 **Texto:** {tipos.get('texto', 0)}")
+    st.markdown("---")
+    st.markdown(f"**Total columnas:** {len(df.columns)}")
+
+# ==========================================
+# PÁGINA: INICIO
+# ==========================================
+if st.session_state.pagina_actual == 'inicio':
+    st.markdown("""
+    <div class="main-header">
+        <h1> Sistema Inteligente de Análisis de Prácticas</h1>
+        <p>Universidad Privada de Tacna - Visualización Automática de Datos</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.markdown(f"""
+        <div class="kpi-card">
+            <p class="kpi-value">{len(df)}</p>
+            <p class="kpi-label">Total Registros</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown(f"""
+        <div class="kpi-card">
+            <p class="kpi-value">{len(df.columns)}</p>
+            <p class="kpi-label">Columnas</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col3:
+        categoricas = sum(1 for v in st.session_state.analisis_columnas.values() if v['tipo'] == 'categorica')
+        st.markdown(f"""
+        <div class="kpi-card">
+            <p class="kpi-value">{categoricas}</p>
+            <p class="kpi-label">Variables Categóricas</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col4:
+        numericas = sum(1 for v in st.session_state.analisis_columnas.values() if v['tipo'] == 'numerica')
+        st.markdown(f"""
+        <div class="kpi-card">
+            <p class="kpi-value">{numericas}</p>
+            <p class="kpi-label">Variables Numéricas</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    st.markdown('<p class="section-title">📋 Columnas Detectadas con Nombres Reales</p>', unsafe_allow_html=True)
+    
+    for tipo_nombre, tipo_valor in [('Numéricas', 'numerica'), ('Categóricas', 'categorica'), ('Fechas', 'fecha')]:
+        cols = [col for col, info in st.session_state.analisis_columnas.items() if info['tipo'] == tipo_valor]
+        if cols:
+            st.markdown(f"### {tipo_nombre}")
+            for col in cols:
+                st.markdown(f"✅ **{col}** ({st.session_state.analisis_columnas[col]['unicos']} valores únicos)")
+            st.markdown("---")
+
+# ==========================================
+# PÁGINA: ANÁLISIS AUTOMÁTICO
+# ==========================================
+elif st.session_state.pagina_actual == 'auto':
+    st.markdown("""
+    <div class="main-header">
+        <h1>📊 Análisis Automático Inteligente</h1>
+        <p>Gráficos generados automáticamente con títulos siempre visibles</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.markdown('<p class="section-title">🎯 Gráficos por Columna</p>', unsafe_allow_html=True)
+    
+    for col in df.columns:
+        tipo = st.session_state.analisis_columnas[col]['tipo']
+        
+        if tipo in ['numerica', 'categorica', 'fecha']:
+            with st.expander(f"📊 {col} - {tipo.upper()} ({st.session_state.analisis_columnas[col]['unicos']} valores únicos)", expanded=False):
+                
+                st.markdown(f'<p class="sub-title">Análisis de: {col}</p>', unsafe_allow_html=True)
+                
+                graficos = generar_grafico_automatico(df, col, tipo)
+                
+                if graficos:
+                    if tipo == 'numerica':
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.plotly_chart(graficos['histograma'], use_container_width=True)
+                        with col2:
+                            st.plotly_chart(graficos['boxplot'], use_container_width=True)
+                        st.markdown("#### 📈 Estadísticas Descriptivas:")
+                        st.dataframe(graficos['estadisticas'], use_container_width=True)
+                    
+                    elif tipo == 'categorica':
+                        if 'barras' in graficos:
+                            st.plotly_chart(graficos['barras'], use_container_width=True)
+                        if 'circular' in graficos:
+                            st.plotly_chart(graficos['circular'], use_container_width=True)
+                        st.markdown("#### 📋 Tabla de Frecuencias:")
+                        st.dataframe(graficos['tabla'], use_container_width=True, hide_index=True)
+                    
+                    elif tipo == 'fecha':
+                        if 'evolucion' in graficos:
+                            st.plotly_chart(graficos['evolucion'], use_container_width=True)
+                        if 'por_año' in graficos:
+                            st.plotly_chart(graficos['por_año'], use_container_width=True)
+
+# ==========================================
+# PÁGINA: ANÁLISIS POR COLUMNA
+# ==========================================
+elif st.session_state.pagina_actual == 'columnas':
+    st.markdown("""
+    <div class="main-header">
+        <h1>🔍 Análisis Detallado por Columna</h1>
+        <p>Selecciona una columna específica para ver su análisis completo</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    col_seleccionada = st.selectbox(
+        "Selecciona una columna:",
+        options=list(df.columns),
+        format_func=lambda x: f"{x} ({st.session_state.analisis_columnas[x]['tipo']})"
+    )
+    
+    if col_seleccionada:
+        tipo = st.session_state.analisis_columnas[col_seleccionada]['tipo']
+        
+        st.markdown(f'<p class="section-title">📊 Análisis de: {col_seleccionada}</p>', unsafe_allow_html=True)
+        st.info(f"**Tipo:** {tipo.upper()} | **Valores únicos:** {st.session_state.analisis_columnas[col_seleccionada]['unicos']} | **Nulos:** {st.session_state.analisis_columnas[col_seleccionada]['nulos']}")
+        
+        graficos = generar_grafico_automatico(df, col_seleccionada, tipo)
+        
+        if graficos:
+            if tipo == 'numerica':
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.plotly_chart(graficos['histograma'], use_container_width=True)
+                with col2:
+                    st.plotly_chart(graficos['boxplot'], use_container_width=True)
+                st.dataframe(graficos['estadisticas'], use_container_width=True)
+            
+            elif tipo == 'categorica':
+                if 'barras' in graficos:
+                    st.plotly_chart(graficos['barras'], use_container_width=True)
+                if 'circular' in graficos:
+                    st.plotly_chart(graficos['circular'], use_container_width=True)
+                st.dataframe(graficos['tabla'], use_container_width=True, hide_index=True)
+            
+            elif tipo == 'fecha':
+                if 'evolucion' in graficos:
+                    st.plotly_chart(graficos['evolucion'], use_container_width=True)
+                if 'por_año' in graficos:
+                    st.plotly_chart(graficos['por_año'], use_container_width=True)
+
+# ==========================================
+# PÁGINA: INDICADORES ICACIT
+# ==========================================
+elif st.session_state.pagina_actual == 'icacit':
+    st.markdown("""
+    <div class="main-header">
+        <h1>📈 Indicadores ICACIT</h1>
+        <p>Métricas de gestión y acreditación</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    col_estado = next((col for col in df.columns if 'ESTADO' in col.upper()), None)
+    col_sector = next((col for col in df.columns if 'SECTOR' in col.upper()), None)
+    col_duracion = next((col for col in df.columns if 'DURACION' in col.upper() or 'DURACIÓN' in col.upper()), None)
+    col_año = next((col for col in df.columns if 'AÑO' in col.upper()), None)
+    
+    if col_estado and col_año:
+        st.markdown('<p class="section-title">📊 Tasa de Culminación por Año</p>', unsafe_allow_html=True)
+        
+        tasas = []
+        for año in sorted(df[col_año].dropna().unique()):
+            df_año = df[df[col_año] == año]
+            total = len(df_año)
+            terminados = len(df_año[df_año[col_estado].astype(str).str.upper().str.contains('TERMINADO', na=False)])
+            tasa = (terminados / total * 100) if total > 0 else 0
+            tasas.append({'Año': año, 'Total': total, 'Terminados': terminados, 'Tasa (%)': round(tasa, 1)})
+        
+        df_tasas = pd.DataFrame(tasas)
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            fig = px.bar(df_tasas, x='Año', y='Tasa (%)',
+                        title='TASA DE CULMINACIÓN (%)',
+                        color='Tasa (%)',
+                        color_continuous_scale='RdYlGn',
+                        text='Tasa (%)')
+            fig.update_traces(textposition='outside')
+            fig.update_layout(yaxis_range=[0, 100], height=450,
+                            plot_bgcolor='white', paper_bgcolor='white',
+                            font=dict(size=13, color='#000000'),
+                            title_font=dict(size=18, color='#000000'))
+            st.plotly_chart(fig, use_container_width=True)
+        with col2:
+            st.dataframe(df_tasas, use_container_width=True, hide_index=True)
+    
+    if col_sector:
+        st.markdown('<p class="section-title">🏢 Distribución por Sector</p>', unsafe_allow_html=True)
+        
+        sector_stats = df[col_sector].value_counts().reset_index()
+        sector_stats.columns = ['Sector', 'Cantidad']
+        sector_stats['Porcentaje'] = (sector_stats['Cantidad'] / sector_stats['Cantidad'].sum() * 100).round(1)
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            fig = px.pie(sector_stats, values='Cantidad', names='Sector',
+                        title='DISTRIBUCIÓN POR SECTOR',
+                        hole=0.4,
+                        color_discrete_sequence=PALETA_PRINCIPAL)
+            fig.update_traces(textposition='inside', textinfo='percent+label+value')
+            fig.update_layout(height=450, plot_bgcolor='white', paper_bgcolor='white',
+                            font=dict(size=13, color='#000000'),
+                            title_font=dict(size=18, color='#000000'))
+            st.plotly_chart(fig, use_container_width=True)
+        with col2:
+            st.dataframe(sector_stats, use_container_width=True, hide_index=True)
+    
+    if col_duracion:
+        st.markdown('<p class="section-title">⏱️ Duración de Prácticas</p>', unsafe_allow_html=True)
+        
+        df_dur = df.copy()
+        df_dur['DURACION_NUM'] = pd.to_numeric(df_dur[col_duracion], errors='coerce')
+        
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Promedio", f"{df_dur['DURACION_NUM'].mean():.0f} días")
+        with col2:
+            st.metric("Mediana", f"{df_dur['DURACION_NUM'].median():.0f} días")
+        with col3:
+            st.metric("Máximo", f"{df_dur['DURACION_NUM'].max():.0f} días")
+        with col4:
+            st.metric("Mínimo", f"{df_dur['DURACION_NUM'].min():.0f} días")
+
+# ==========================================
+# PÁGINA: DATOS COMPLETOS
+# ==========================================
+elif st.session_state.pagina_actual == 'datos':
+    st.markdown("""
+    <div class="main-header">
+        <h1>📋 Datos Completos</h1>
+        <p>Visualización y exportación de datos</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.dataframe(df, use_container_width=True, height=600)
+    
+    csv = df.to_csv(index=False).encode('utf-8')
+    st.download_button(
+        label="📥 Descargar CSV",
+        data=csv,
+        file_name=f"practicas_pre_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+        mime="text/csv",
+        use_container_width=True
+    )
+
+# ==========================================
+# FOOTER
+# ==========================================
+st.markdown("""
+<div class="footer">
+    <p><strong>🎓 Universidad Privada de Tacna</strong> - Escuela de Ingeniería de Sistemas</p>
+    <p> Dashboard Inteligente con Visualización Automática | Acreditación ICACIT</p>
+    <p>Actualizado: {fecha}</p>
+</div>
+""".format(fecha=datetime.now().strftime('%d/%m/%Y %H:%M:%S')), unsafe_allow_html=True)
