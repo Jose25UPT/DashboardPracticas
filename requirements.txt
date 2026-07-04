@@ -4,3 +4,4 @@ plotly
 requests
 streamlit-autorefresh
 numpy
+openpyxl
