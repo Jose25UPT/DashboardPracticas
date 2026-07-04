@@ -226,23 +226,105 @@ def limpiar_nombres_columnas(df):
     return df
 
 def detectar_y_corregir_encabezado(df_raw):
-    """Detecta si la primera fila tiene nombres reales o es data"""
-    primera_fila = df_raw.iloc[0] if len(df_raw) > 0 else None
+    """
+    Detecta automáticamente la fila de encabezado y usa nombres reales
+    """
+    if len(df_raw) == 0:
+        return df_raw
     
-    if primera_fila is not None:
-        es_encabezado = 0
-        for val in primera_fila:
-            if isinstance(val, str) and len(val) < 50 and 'unnamed' not in val.lower():
-                es_encabezado += 1
+    # Buscar la fila que tiene más texto descriptivo (no números)
+    mejor_fila_header = 0
+    max_puntuacion = 0
+    
+    for idx_fila in range(min(5, len(df_raw))):  # Revisar primeras 5 filas
+        fila = df_raw.iloc[idx_fila]
+        puntuacion = 0
         
-        if es_encabezado > len(primera_fila) * 0.5:
-            nuevos_headers = [str(v).strip().upper() if pd.notna(v) and str(v).strip() != '' else f'COL_{i}' 
-                            for i, v in enumerate(primera_fila)]
-            df = df_raw.iloc[1:].copy()
-            df.columns = nuevos_headers
-            return df
+        for valor in fila:
+            if pd.notna(valor):
+                texto = str(valor).strip()
+                # Si es texto descriptivo (no es número puro, tiene letras)
+                if any(c.isalpha() for c in texto) and len(texto) < 100:
+                    puntuacion += 1
+                # Si parece ser un header común
+                headers_comunes = ['AÑO', 'NOMBRE', 'ESTADO', 'SECTOR', 'TIPO', 
+                                  'DURACIÓN', 'EMPRESA', 'DOCENTE', 'FECHA', 
+                                  'REGISTRO', 'CODIGO', 'DNI', 'EMAIL', 'RUBRO']
+                if texto.upper() in headers_comunes or any(h in texto.upper() for h in headers_comunes):
+                    puntuacion += 2
+        
+        if puntuacion > max_puntuacion:
+            max_puntuacion = puntuacion
+            mejor_fila_header = idx_fila
     
-    return df_raw
+    # Usar la mejor fila encontrada como header
+    if max_puntuacion > 0:
+        headers = df_raw.iloc[mejor_fila_header].tolist()
+        
+        # Limpiar headers: convertir a string, mayúsculas, sin espacios extra
+        headers_limpios = []
+        for i, h in enumerate(headers):
+            if pd.notna(h) and str(h).strip() != '':
+                header_limpio = str(h).strip().upper()
+                # Reemplazar espacios y caracteres especiales con guiones bajos
+                header_limpio = header_limpio.replace(' ', '_').replace('/', '_').replace('-', '_')
+                # Quitar tildes
+                tildes = {'Á': 'A', 'É': 'E', 'Í': 'I', 'Ó': 'O', 'Ú': 'U'}
+                for tilde, normal in tildes.items():
+                    header_limpio = header_limpio.replace(tilde, normal)
+                headers_limpios.append(header_limpio)
+            else:
+                headers_limpios.append(f'COLUMNA_{i+1}')
+        
+        # Crear dataframe con datos después del header
+        df = df_raw.iloc[mejor_fila_header + 1:].copy()
+        df.columns = headers_limpios
+        
+        return df
+    
+    # Si no encontró buen header, usar la primera fila
+    headers = [str(h).strip().upper() if pd.notna(h) and str(h).strip() != '' else f'COLUMNA_{i}' 
+               for i, h in enumerate(df_raw.iloc[0])]
+    df = df_raw.iloc[1:].copy()
+    df.columns = headers
+    
+    return df
+
+
+def limpiar_nombres_columnas(df):
+    """
+    Limpia y estandariza nombres de columnas
+    """
+    # Mapeo de nombres comunes (para unificar variaciones)
+    mapeo_nombres = {
+        'AÑO_REGISTRO': 'AÑO',
+        'AÑO': 'AÑO',
+        'NRO_REGISTRO': 'NRO_REGISTRO',
+        'NUMERO_REGISTRO': 'NRO_REGISTRO',
+        'NRO_DE_CARTA': 'NRO_CARTA',
+        'NUMERO_CARTA': 'NRO_CARTA',
+        'DURACIÓN': 'DURACION',
+        'DURACION_DIAS': 'DURACION',
+        'DOCENTE_REVISOR': 'DOCENTE_REVISOR',
+        'PROFESOR_REVISOR': 'DOCENTE_REVISOR',
+        'FECHA_INICIO': 'FECHA_INICIO',
+        'FECHA_FIN': 'FECHA_FIN',
+        'FECHA_DE_INICIO': 'FECHA_INICIO',
+        'FECHA_DE_FIN': 'FECHA_FIN',
+    }
+    
+    # Aplicar mapeo
+    nuevas_columnas = []
+    for col in df.columns:
+        col_upper = col.upper().strip()
+        if col_upper in mapeo_nombres:
+            nuevas_columnas.append(mapeo_nombres[col_upper])
+        else:
+            nuevas_columnas.append(col_upper)
+    
+    df.columns = nuevas_columnas
+    
+    return df
 
 # ==========================================
 # FUNCIONES DE ANÁLISIS
@@ -612,6 +694,7 @@ if st.session_state.pagina_actual == 'inicio':
 # ==========================================
 # PÁGINA: ANÁLISIS AUTOMÁTICO
 # ==========================================
+
 elif st.session_state.pagina_actual == 'auto':
     st.markdown("""
     <div class="main-header">
@@ -624,10 +707,13 @@ elif st.session_state.pagina_actual == 'auto':
     
     for col in df.columns:
         tipo = st.session_state.analisis_columnas[col]['tipo']
+        unicos = st.session_state.analisis_columnas[col]['unicos']
         
         if tipo in ['numerica', 'categorica', 'fecha']:
-            with st.expander(f"📊 {col} - {tipo.upper()} ({st.session_state.analisis_columnas[col]['unicos']} valores únicos)", expanded=False):
-                
+            # Mostrar NOMBRE REAL de la columna
+            expander_title = f"📊 {col} - {tipo.upper()} ({unicos} valores únicos)"
+            
+            with st.expander(expander_title, expanded=False):
                 st.markdown(f'<p class="sub-title">Análisis de: {col}</p>', unsafe_allow_html=True)
                 
                 graficos = generar_grafico_automatico(df, col, tipo)
