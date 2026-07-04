@@ -581,6 +581,7 @@ def cargar_datos():
             df_raw = pd.read_excel(io.BytesIO(response.content), sheet_name='PRACTICAS PRE', header=None)
             df = detectar_y_corregir_encabezado(df_raw)
             df = limpiar_nombres_columnas(df)
+            df = eliminar_columnas_duplicadas(df)  # ✅ AGREGAR ESTA LÍNEA
             df = df.dropna(how='all')
             return df
         return pd.DataFrame()
@@ -588,12 +589,32 @@ def cargar_datos():
         st.error(f"Error al cargar: {e}")
         return pd.DataFrame()
 
-st_autorefresh(interval=30000, limit=100, key="refresh")
-
 # ==========================================
 # CARGAR DATOS
 # ==========================================
 df = cargar_datos()
+
+def eliminar_columnas_duplicadas(df):
+    """
+    Detecta y renombra columnas duplicadas agregando sufijos numéricos
+    """
+    columnas_vistas = {}
+    nuevas_columnas = []
+    
+    for col in df.columns:
+        col_str = str(col)
+        
+        # Si ya hemos visto esta columna, agregar sufijo
+        if col_str in columnas_vistas:
+            columnas_vistas[col_str] += 1
+            nueva_col = f"{col_str}_{columnas_vistas[col_str]}"
+            nuevas_columnas.append(nueva_col)
+        else:
+            columnas_vistas[col_str] = 0
+            nuevas_columnas.append(col_str)
+    
+    df.columns = nuevas_columnas
+    return df
 
 if df.empty:
     st.error("❌ No se pudieron cargar los datos.")
