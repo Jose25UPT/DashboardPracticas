@@ -176,54 +176,28 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# FUNCIÓN PARA LIMPIAR NOMBRES DE COLUMNAS
+# PALETA DE COLORES
+# ==========================================
+PALETA_PRINCIPAL = ['#667eea', '#764ba2', '#f093fb', '#f5576c', '#4facfe', '#00f2fe', 
+                    '#43e97b', '#38f9d7', '#fa709a', '#fee140', '#30cfd0', '#330867']
+
+# ==========================================
+# FUNCIONES DE LIMPIEZA DE DATOS
 # ==========================================
 
-def limpiar_nombres_columnas(df):
-    """Limpia y renombra columnas UNNAMED con nombres descriptivos"""
-    mapeo_nombres = {
-        'UNNAMED: 0': 'NRO_FILA',
-        'UNNAMED: 1': 'AÑO_REGISTRO',
-        'UNNAMED: 2': 'NRO_REGISTRO',
-        'UNNAMED: 3': 'NRO_CARTA',
-        'UNNAMED: 4': 'CODIGO',
-        'UNNAMED: 5': 'DNI',
-        'UNNAMED: 6': 'NOMBRE',
-        'UNNAMED: 7': 'CELULAR',
-        'UNNAMED: 8': 'EMAIL',
-        'UNNAMED: 9': 'DIRECCION',
-        'UNNAMED: 10': 'FECHA_INICIO',
-        'UNNAMED: 11': 'FECHA_FIN',
-        'UNNAMED: 12': 'DURACION',
-        'UNNAMED: 13': 'EMPRESA',
-        'UNNAMED: 14': 'ENCARGADO',
-        'UNNAMED: 15': 'RUBRO',
-        'UNNAMED: 16': 'FUNCIONES_AREA',
-        'UNNAMED: 17': 'DOCENTE_REVISOR',
-        'UNNAMED: 18': 'CORREO_ENVIADO',
-        'UNNAMED: 19': 'TIEMPO_REVISION',
-        'UNNAMED: 20': 'EGRESO_CICLO',
-        'UNNAMED: 21': 'NOMBRE_INFORME',
-        'UNNAMED: 22': 'EMPRESA_NOMBRE',
-        'UNNAMED: 23': 'SECTOR',
-        'UNNAMED: 24': 'TIPO',
-        'UNNAMED: 25': 'FECHA_CONFORMIDAD',
-        'UNNAMED: 26': 'ESTADO',
-        'UNNAMED: 27': 'OBSERVACION',
-    }
+def normalizar_texto(valor):
+    """Normaliza texto: quita tildes, convierte a mayúsculas, elimina espacios extra"""
+    if pd.isna(valor) or str(valor).strip() == '':
+        return None
     
-    df = df.rename(columns=mapeo_nombres)
+    texto = str(valor).strip().upper()
     
-    nuevas_columnas = []
-    for i, col in enumerate(df.columns):
-        if 'UNNAMED' in str(col).upper() or col == '' or pd.isna(col):
-            nuevas_columnas.append(f'COLUMNA_{i+1}')
-        else:
-            nuevas_columnas.append(str(col).strip().upper())
+    # Quitar tildes
+    tildes = {'Á': 'A', 'É': 'E', 'Í': 'I', 'Ó': 'O', 'Ú': 'U', 'Ñ': 'NN'}
+    for tilde, normal in tildes.items():
+        texto = texto.replace(tilde, normal)
     
-    df.columns = nuevas_columnas
-    
-    return df
+    return texto
 
 def detectar_y_corregir_encabezado(df_raw):
     """
@@ -330,10 +304,8 @@ def limpiar_nombres_columnas(df):
 # FUNCIONES DE ANÁLISIS
 # ==========================================
 
-PALETA_PRINCIPAL = ['#667eea', '#764ba2', '#f093fb', '#f5576c', '#4facfe', '#00f2fe', 
-                    '#43e97b', '#38f9d7', '#fa709a', '#fee140', '#30cfd0', '#330867']
-
 def detectar_tipo_columna(serie):
+    """Detecta automáticamente el tipo de columna"""
     serie_limpia = serie.dropna()
     
     if len(serie_limpia) == 0:
@@ -359,29 +331,6 @@ def detectar_tipo_columna(serie):
         return 'categorica'
     
     return 'texto'
-
-def generar_grafico_automatico(df, columna, tipo):
-    if tipo == 'numerica':
-        return generar_grafico_numerico(df, columna)
-    elif tipo == 'categorica':
-        return generar_grafico_categorico(df, columna)
-    elif tipo == 'fecha':
-        return generar_grafico_temporal(df, columna)
-    else:
-        return None
-def normalizar_texto(valor):
-    """Normaliza texto: quita tildes, convierte a mayúsculas, elimina espacios extra"""
-    if pd.isna(valor) or str(valor).strip() == '':
-        return None
-    
-    texto = str(valor).strip().upper()
-    
-    # Quitar tildes
-    tildes = {'Á': 'A', 'É': 'E', 'Í': 'I', 'Ó': 'O', 'Ú': 'U', 'Ñ': 'NN'}
-    for tilde, normal in tildes.items():
-        texto = texto.replace(tilde, normal)
-    
-    return texto
 
 def limpiar_datos_categoricos(df, columna):
     """Limpia datos categóricos: elimina headers, normaliza tildes, agrupa duplicados"""
@@ -423,6 +372,62 @@ def limpiar_datos_categoricos(df, columna):
         conteos['Porcentaje'] = 0
     
     return conteos
+
+def generar_grafico_numerico(df, columna):
+    """Genera gráficos para columnas numéricas"""
+    figs = {}
+    
+    # Convertir a numérico
+    df_num = df.copy()
+    df_num[columna] = pd.to_numeric(df_num[columna], errors='coerce')
+    df_num = df_num.dropna(subset=[columna])
+    
+    if len(df_num) == 0:
+        return None
+    
+    # Histograma
+    fig_hist = px.histogram(df_num, x=columna, 
+                           title=f'📊 DISTRIBUCIÓN: {columna}',
+                           color_discrete_sequence=['#667eea'],
+                           opacity=0.9)
+    fig_hist.update_layout(
+        height=450,
+        plot_bgcolor='white',
+        paper_bgcolor='white',
+        font=dict(size=13, color='#000000', family='Arial'),
+        title_font=dict(size=18, color='#000000', family='Arial'),
+        xaxis_title=columna,
+        yaxis_title='Frecuencia',
+        showlegend=False,
+        xaxis=dict(showgrid=True, gridcolor='#e2e8f0', 
+                   tickfont=dict(color='#000000', size=12)),
+        yaxis=dict(showgrid=True, gridcolor='#e2e8f0',
+                   tickfont=dict(color='#000000', size=12))
+    )
+    figs['histograma'] = fig_hist
+    
+    # Boxplot
+    fig_box = px.box(df_num, y=columna,
+                    title=f'📦 DISTRIBUCIÓN ESTADÍSTICA: {columna}',
+                    color_discrete_sequence=['#f5576c'],
+                    points='all')
+    fig_box.update_layout(
+        height=450,
+        plot_bgcolor='white',
+        paper_bgcolor='white',
+        font=dict(size=13, color='#000000'),
+        title_font=dict(size=18, color='#000000'),
+        yaxis_title=columna,
+        yaxis=dict(showgrid=True, gridcolor='#e2e8f0',
+                   tickfont=dict(color='#000000', size=12))
+    )
+    figs['boxplot'] = fig_box
+    
+    # Estadísticas
+    stats = df_num[columna].describe()
+    figs['estadisticas'] = stats
+    
+    return figs
 
 def generar_grafico_categorico(df, columna):
     """Genera gráficos para columnas categóricas con datos LIMPIOS"""
@@ -488,9 +493,14 @@ def generar_grafico_categorico(df, columna):
     return figs
 
 def generar_grafico_temporal(df, columna):
+    """Genera gráficos para columnas de fecha"""
     figs = {}
     
     df_temp = df.copy()
+    
+    # Limpiar: eliminar headers
+    df_temp = df_temp[~df_temp[columna].astype(str).str.upper().str.strip().isin([columna.upper(), 'FECHA', 'DATE'])]
+    
     df_temp[columna] = pd.to_datetime(df_temp[columna], errors='coerce')
     df_temp = df_temp.dropna(subset=[columna])
     
@@ -515,9 +525,9 @@ def generar_grafico_temporal(df, columna):
         xaxis_title='Período',
         yaxis_title='Cantidad',
         xaxis=dict(tickangle=-45, showgrid=True, gridcolor='#e2e8f0',
-                   tickfont=dict(color='#000000', size=12)),  # ✅ NEGRO
+                   tickfont=dict(color='#000000', size=12)),
         yaxis=dict(showgrid=True, gridcolor='#e2e8f0',
-                   tickfont=dict(color='#000000', size=12))  # ✅ NEGRO
+                   tickfont=dict(color='#000000', size=12))
     )
     figs['evolucion'] = fig_line
     
@@ -539,13 +549,24 @@ def generar_grafico_temporal(df, columna):
         xaxis_title='Año',
         yaxis_title='Cantidad',
         xaxis=dict(showgrid=True, gridcolor='#e2e8f0',
-                   tickfont=dict(color='#000000', size=12)),  # ✅ NEGRO
+                   tickfont=dict(color='#000000', size=12)),
         yaxis=dict(showgrid=True, gridcolor='#e2e8f0',
-                   tickfont=dict(color='#000000', size=12))  # ✅ NEGRO
+                   tickfont=dict(color='#000000', size=12))
     )
     figs['por_año'] = fig_bar
     
     return figs
+
+def generar_grafico_automatico(df, columna, tipo):
+    """Genera el gráfico apropiado según el tipo de dato"""
+    if tipo == 'numerica':
+        return generar_grafico_numerico(df, columna)
+    elif tipo == 'categorica':
+        return generar_grafico_categorico(df, columna)
+    elif tipo == 'fecha':
+        return generar_grafico_temporal(df, columna)
+    else:
+        return None
 
 # ==========================================
 # CARGA DE DATOS
@@ -578,17 +599,33 @@ if df.empty:
     st.error("❌ No se pudieron cargar los datos.")
     st.stop()
 
-# Análisis automático de columnas
-if 'analisis_columnas' not in st.session_state:
-    st.session_state.analisis_columnas = {}
+# ==========================================
+# ANÁLISIS AUTOMÁTICO DE COLUMNAS (CON PROTECCIÓN)
+# ==========================================
+def inicializar_analisis_columnas():
+    """Inicializa el análisis de columnas de forma segura"""
+    analisis = {}
     for col in df.columns:
-        tipo = detectar_tipo_columna(df[col])
-        st.session_state.analisis_columnas[col] = {
-            'tipo': tipo,
-            'unicos': df[col].nunique(),
-            'nulos': df[col].isnull().sum(),
-            'total': len(df)
-        }
+        try:
+            tipo = detectar_tipo_columna(df[col])
+            analisis[col] = {
+                'tipo': tipo,
+                'unicos': int(df[col].nunique()),
+                'nulos': int(df[col].isnull().sum()),
+                'total': len(df)
+            }
+        except Exception as e:
+            analisis[col] = {
+                'tipo': 'texto',
+                'unicos': 0,
+                'nulos': 0,
+                'total': len(df)
+            }
+    return analisis
+
+# Inicializar una sola vez
+if 'analisis_columnas' not in st.session_state:
+    st.session_state.analisis_columnas = inicializar_analisis_columnas()
 
 # ==========================================
 # NAVEGACIÓN
@@ -607,7 +644,7 @@ with st.sidebar:
     st.markdown("## 📊 Dashboard Inteligente")
     st.markdown("---")
     
-    if st.button(" Inicio", use_container_width=True, key="nav1"):
+    if st.button("🏠 Inicio", use_container_width=True, key="nav1"):
         navegar_a('inicio')
     
     if st.button("📊 Análisis Automático", use_container_width=True, key="nav2"):
@@ -619,13 +656,13 @@ with st.sidebar:
     if st.button("📈 Indicadores ICACIT", use_container_width=True, key="nav4"):
         navegar_a('icacit')
     
-    if st.button(" Datos Completos", use_container_width=True, key="nav5"):
+    if st.button("📋 Datos Completos", use_container_width=True, key="nav5"):
         navegar_a('datos')
     
     st.markdown("---")
     st.markdown("### 📊 Resumen de Columnas")
     
-    tipos = Counter([v['tipo'] for v in st.session_state.analisis_columnas.values()])
+    tipos = Counter([v.get('tipo', 'texto') for v in st.session_state.analisis_columnas.values()])
     
     st.markdown(f"🔢 **Numéricas:** {tipos.get('numerica', 0)}")
     st.markdown(f"📋 **Categóricas:** {tipos.get('categorica', 0)}")
@@ -640,7 +677,7 @@ with st.sidebar:
 if st.session_state.pagina_actual == 'inicio':
     st.markdown("""
     <div class="main-header">
-        <h1> Sistema Inteligente de Análisis de Prácticas</h1>
+        <h1>📊 Sistema Inteligente de Análisis de Prácticas</h1>
         <p>Universidad Privada de Tacna - Visualización Automática de Datos</p>
     </div>
     """, unsafe_allow_html=True)
@@ -664,7 +701,7 @@ if st.session_state.pagina_actual == 'inicio':
         """, unsafe_allow_html=True)
     
     with col3:
-        categoricas = sum(1 for v in st.session_state.analisis_columnas.values() if v['tipo'] == 'categorica')
+        categoricas = sum(1 for v in st.session_state.analisis_columnas.values() if v.get('tipo') == 'categorica')
         st.markdown(f"""
         <div class="kpi-card">
             <p class="kpi-value">{categoricas}</p>
@@ -673,7 +710,7 @@ if st.session_state.pagina_actual == 'inicio':
         """, unsafe_allow_html=True)
     
     with col4:
-        numericas = sum(1 for v in st.session_state.analisis_columnas.values() if v['tipo'] == 'numerica')
+        numericas = sum(1 for v in st.session_state.analisis_columnas.values() if v.get('tipo') == 'numerica')
         st.markdown(f"""
         <div class="kpi-card">
             <p class="kpi-value">{numericas}</p>
@@ -684,17 +721,17 @@ if st.session_state.pagina_actual == 'inicio':
     st.markdown('<p class="section-title">📋 Columnas Detectadas con Nombres Reales</p>', unsafe_allow_html=True)
     
     for tipo_nombre, tipo_valor in [('Numéricas', 'numerica'), ('Categóricas', 'categorica'), ('Fechas', 'fecha')]:
-        cols = [col for col, info in st.session_state.analisis_columnas.items() if info['tipo'] == tipo_valor]
+        cols = [col for col, info in st.session_state.analisis_columnas.items() if info.get('tipo') == tipo_valor]
         if cols:
             st.markdown(f"### {tipo_nombre}")
             for col in cols:
-                st.markdown(f"✅ **{col}** ({st.session_state.analisis_columnas[col]['unicos']} valores únicos)")
+                unicos = st.session_state.analisis_columnas[col].get('unicos', 0)
+                st.markdown(f"✅ **{col}** ({unicos} valores únicos)")
             st.markdown("---")
 
 # ==========================================
 # PÁGINA: ANÁLISIS AUTOMÁTICO
 # ==========================================
-
 elif st.session_state.pagina_actual == 'auto':
     st.markdown("""
     <div class="main-header">
@@ -706,11 +743,11 @@ elif st.session_state.pagina_actual == 'auto':
     st.markdown('<p class="section-title">🎯 Gráficos por Columna</p>', unsafe_allow_html=True)
     
     for col in df.columns:
-        tipo = st.session_state.analisis_columnas[col]['tipo']
-        unicos = st.session_state.analisis_columnas[col]['unicos']
+        info_col = st.session_state.analisis_columnas.get(col, {})
+        tipo = info_col.get('tipo', 'texto')
+        unicos = info_col.get('unicos', 0)
         
         if tipo in ['numerica', 'categorica', 'fecha']:
-            # Mostrar NOMBRE REAL de la columna
             expander_title = f"📊 {col} - {tipo.upper()} ({unicos} valores únicos)"
             
             with st.expander(expander_title, expanded=False):
@@ -753,17 +790,37 @@ elif st.session_state.pagina_actual == 'columnas':
     </div>
     """, unsafe_allow_html=True)
     
+    # ✅ PROTECCIÓN: Verificar que haya columnas disponibles
+    if len(df.columns) == 0:
+        st.warning("No hay columnas disponibles para analizar.")
+        st.stop()
+    
+    # ✅ SOLUCIÓN DEL ERROR: Usar .get() con valor por defecto
+    def format_columna(x):
+        """Función segura para formatear el nombre de la columna"""
+        try:
+            info = st.session_state.analisis_columnas.get(x, {})
+            tipo = info.get('tipo', 'desconocido')
+            return f"{x} ({tipo})"
+        except:
+            return str(x)
+    
     col_seleccionada = st.selectbox(
         "Selecciona una columna:",
         options=list(df.columns),
-        format_func=lambda x: f"{x} ({st.session_state.analisis_columnas[x]['tipo']})"
+        format_func=format_columna,
+        key="selectbox_columna"
     )
     
     if col_seleccionada:
-        tipo = st.session_state.analisis_columnas[col_seleccionada]['tipo']
+        # ✅ Obtener info de forma segura
+        info_col = st.session_state.analisis_columnas.get(col_seleccionada, {})
+        tipo = info_col.get('tipo', 'texto')
+        unicos = info_col.get('unicos', 0)
+        nulos = info_col.get('nulos', 0)
         
         st.markdown(f'<p class="section-title">📊 Análisis de: {col_seleccionada}</p>', unsafe_allow_html=True)
-        st.info(f"**Tipo:** {tipo.upper()} | **Valores únicos:** {st.session_state.analisis_columnas[col_seleccionada]['unicos']} | **Nulos:** {st.session_state.analisis_columnas[col_seleccionada]['nulos']}")
+        st.info(f"**Tipo:** {tipo.upper()} | **Valores únicos:** {unicos} | **Nulos:** {nulos}")
         
         graficos = generar_grafico_automatico(df, col_seleccionada, tipo)
         
@@ -899,7 +956,7 @@ elif st.session_state.pagina_actual == 'datos':
 st.markdown("""
 <div class="footer">
     <p><strong>🎓 Universidad Privada de Tacna</strong> - Escuela de Ingeniería de Sistemas</p>
-    <p> Dashboard Inteligente con Visualización Automática | Acreditación ICACIT</p>
+    <p>📊 Dashboard Inteligente con Visualización Automática | Acreditación ICACIT</p>
     <p>Actualizado: {fecha}</p>
 </div>
 """.format(fecha=datetime.now().strftime('%d/%m/%Y %H:%M:%S')), unsafe_allow_html=True)
