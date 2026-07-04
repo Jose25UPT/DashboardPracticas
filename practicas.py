@@ -287,57 +287,73 @@ def generar_grafico_automatico(df, columna, tipo):
         return generar_grafico_temporal(df, columna)
     else:
         return None
+def normalizar_texto(valor):
+    """Normaliza texto: quita tildes, convierte a mayúsculas, elimina espacios extra"""
+    if pd.isna(valor) or str(valor).strip() == '':
+        return None
+    
+    texto = str(valor).strip().upper()
+    
+    # Quitar tildes
+    tildes = {'Á': 'A', 'É': 'E', 'Í': 'I', 'Ó': 'O', 'Ú': 'U', 'Ñ': 'NN'}
+    for tilde, normal in tildes.items():
+        texto = texto.replace(tilde, normal)
+    
+    return texto
 
-def generar_grafico_numerico(df, columna):
-    figs = {}
+def limpiar_datos_categoricos(df, columna):
+    """Limpia datos categóricos: elimina headers, normaliza tildes, agrupa duplicados"""
+    df_limpio = df.copy()
     
-    fig_hist = px.histogram(df, x=columna, 
-                           title=f'📊 DISTRIBUCIÓN: {columna}',
-                           color_discrete_sequence=['#667eea'],
-                           opacity=0.9)
-    fig_hist.update_layout(
-        height=450,
-        plot_bgcolor='white',
-        paper_bgcolor='white',
-        font=dict(size=13, color='#000000', family='Arial'),
-        title_font=dict(size=18, color='#000000', family='Arial'),
-        xaxis_title=columna,
-        yaxis_title='Frecuencia',
-        showlegend=False,
-        xaxis=dict(showgrid=True, gridcolor='#e2e8f0', 
-                   tickfont=dict(color='#000000', size=12)),  # ✅ NEGRO
-        yaxis=dict(showgrid=True, gridcolor='#e2e8f0',
-                   tickfont=dict(color='#000000', size=12))  # ✅ NEGRO
-    )
-    figs['histograma'] = fig_hist
+    # Obtener valores de la columna
+    valores = df_limpio[columna].copy()
     
-    fig_box = px.box(df, y=columna,
-                    title=f'📦 DISTRIBUCIÓN ESTADÍSTICA: {columna}',
-                    color_discrete_sequence=['#f5576c'],
-                    points='all')
-    fig_box.update_layout(
-        height=450,
-        plot_bgcolor='white',
-        paper_bgcolor='white',
-        font=dict(size=13, color='#000000'),
-        title_font=dict(size=18, color='#000000'),
-        yaxis_title=columna,
-        yaxis=dict(showgrid=True, gridcolor='#e2e8f0',
-                   tickfont=dict(color='#000000', size=12))  # ✅ NEGRO
-    )
-    figs['boxplot'] = fig_box
+    # 1. Eliminar filas donde el valor sea igual al nombre de la columna (header)
+    valores = valores[valores.astype(str).str.upper().str.strip() != columna.upper().strip()]
     
-    stats = df[columna].describe()
-    figs['estadisticas'] = stats
+    # 2. Eliminar filas que parezcan headers (números puros, palabras como "cantidad", "porcentaje")
+    headers_comunes = ['CANTIDAD', 'PORCENTAJE', 'TOTAL', 'COUNT', 'FRECUENCIA', 
+                       'TIPO', 'ESTADO', 'SECTOR', 'NOMBRE', 'VALOR']
     
-    return figs
-
-def generar_grafico_categorico(df, columna):
-    figs = {}
+    mascara_validos = ~valores.astype(str).str.upper().str.strip().isin(headers_comunes)
+    valores = valores[mascara_validos]
     
-    conteos = df[columna].value_counts().reset_index()
+    # 3. Eliminar valores numéricos puros (como "24")
+    valores = valores[~valores.astype(str).str.match(r'^\d+$')]
+    
+    # 4. Normalizar texto (quitar tildes)
+    valores_normalizados = valores.apply(normalizar_texto)
+    
+    # 5. Eliminar valores nulos después de normalizar
+    mascara_no_nulos = valores_normalizados.notna()
+    valores = valores[mascara_no_nulos]
+    valores_normalizados = valores_normalizados[mascara_no_nulos]
+    
+    # 6. Contar frecuencias de valores normalizados
+    conteos = valores_normalizados.value_counts().reset_index()
     conteos.columns = [columna, 'Cantidad']
     
+    # 7. Calcular porcentaje
+    total = conteos['Cantidad'].sum()
+    if total > 0:
+        conteos['Porcentaje'] = (conteos['Cantidad'] / total * 100).round(2)
+    else:
+        conteos['Porcentaje'] = 0
+    
+    return conteos
+
+def generar_grafico_categorico(df, columna):
+    """Genera gráficos para columnas categóricas con datos LIMPIOS"""
+    figs = {}
+    
+    # LIMPIAR DATOS antes de generar gráficos
+    conteos = limpiar_datos_categoricos(df, columna)
+    
+    if len(conteos) == 0:
+        st.warning(f"No hay datos válidos en la columna {columna}")
+        return None
+    
+    # Gráfico de barras horizontales
     fig_bar = px.bar(conteos, y=columna, x='Cantidad',
                     title=f'📊 DISTRIBUCIÓN: {columna}',
                     color='Cantidad',
@@ -358,15 +374,16 @@ def generar_grafico_categorico(df, columna):
         showlegend=False,
         margin=dict(l=200, r=50, t=80, b=50),
         xaxis=dict(showgrid=True, gridcolor='#e2e8f0',
-                   tickfont=dict(color='#000000', size=12)),  # ✅ NEGRO
+                   tickfont=dict(color='#000000', size=12)),
         yaxis=dict(showgrid=False,
-                   tickfont=dict(color='#000000', size=12, family='Arial'))  # ✅ NEGRO
+                   tickfont=dict(color='#000000', size=12, family='Arial'))
     )
     figs['barras'] = fig_bar
     
+    # Gráfico circular (si hay menos de 15 categorías)
     if len(conteos) <= 15:
         fig_pie = px.pie(conteos, values='Cantidad', names=columna,
-                        title=f' DISTRIBUCIÓN PORCENTUAL: {columna}',
+                        title=f'🥧 DISTRIBUCIÓN PORCENTUAL: {columna}',
                         hole=0.4,
                         color_discrete_sequence=PALETA_PRINCIPAL)
         fig_pie.update_traces(textposition='inside',
@@ -379,11 +396,11 @@ def generar_grafico_categorico(df, columna):
             paper_bgcolor='white',
             font=dict(size=12, color='#000000'),
             title_font=dict(size=18, color='#000000'),
-            legend=dict(font=dict(size=11, color='#000000'), bgcolor='white')  # ✅ NEGRO
+            legend=dict(font=dict(size=11, color='#000000'), bgcolor='white')
         )
         figs['circular'] = fig_pie
     
-    conteos['Porcentaje'] = (conteos['Cantidad'] / conteos['Cantidad'].sum() * 100).round(2)
+    # Agregar porcentaje a la tabla
     figs['tabla'] = conteos
     
     return figs
